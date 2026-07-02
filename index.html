@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Synapse Suite — Adaptive AI Tutor & Visual Engine</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800;900&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary: #4F46E5;
+            --primary-dark: #4338CA;
+            --primary-light: #818CF8;
+            --secondary: #0EA5E9;
+            --secondary-dark: #0284C7;
+            --accent: #14B8A6;
+            --accent-warm: #F59E0B;
+            --success: #10B981;
+            --warning: #F59E0B;
+            --danger: #EF4444;
+            --bg-dark: #F9FAFB;
+            --bg-card: #FFFFFF;
+            --bg-card-hover: #FFFFFF;
+            --text-primary: #111827;
+            --text-secondary: #4B5563;
+            --text-muted: #9CA3AF;
+            --border: #E5E7EB;
+            --border-hover: #D1D5DB;
+            --radius: 12px;
+            --radius-sm: 8px;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+            --shadow-glow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+            --shadow-secondary: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+            --gradient-1: linear-gradient(135deg, #4F46E5, #0EA5E9);
+            --gradient-text: var(--text-primary);
+            --transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #05050f;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1c1c38;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #2a2a54;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* ── HEADER ───────────────────────────────────────────────────────────── */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 0;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+        }
+
+        .logo-symbol {
+            width: 42px;
+            height: 42px;
+            background: var(--gradient-1);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 900;
+            font-size: 1.6rem;
+            color: white;
+            box-shadow: 0 4px 15px rgba(108, 99, 255, 0.4);
+            animation: pulse 3s infinite alternate;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 4px 15px rgba(108, 99, 255, 0.4); }
+            100% { transform: scale(1.04); box-shadow: 0 4px 25px rgba(0, 210, 255, 0.5); }
+        }
+
+        .logo-text {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 800;
+            font-size: 1.5rem;
+            letter-spacing: -0.5px;
+        }
+
+        .logo-sub {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-top: -3px;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 1.5rem;
+            align-items: center;
+        }
+
+        .nav-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.9rem;
+            transition: var(--transition);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+        }
+
+        .nav-link:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .nav-link.active {
+            color: #00D2FF;
+            background: rgba(0, 210, 255, 0.08);
+            border: 1px solid rgba(0, 210, 255, 0.15);
+        }
+
+        /* ── HERO BANNER ───────────────────────────────────────────────────────── */
+        .hero {
+            text-align: center;
+            padding: 3rem 1rem 4rem 1rem;
+            position: relative;
+        }
+
+        .hero-tag {
+            display: inline-block;
+            background: rgba(108, 99, 255, 0.08);
+            border: 1px solid rgba(108, 99, 255, 0.2);
+            color: var(--primary-light);
+            border-radius: 30px;
+            padding: 0.35rem 1.1rem;
+            font-size: 0.78rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            margin-bottom: 1.5rem;
+        }
+
+        .hero h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 3.5rem;
+            font-weight: 900;
+            line-height: 1.15;
+            margin-bottom: 1rem;
+            letter-spacing: -1px;
+            background: var(--gradient-text);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero p {
+            font-size: 1.15rem;
+            color: var(--text-secondary);
+            max-width: 760px;
+            margin: 0 auto 2.5rem auto;
+            font-weight: 300;
+        }
+
+        /* ── SERVER STATUS ROW ─────────────────────────────────────────────────── */
+        .status-bar {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-bottom: 3.5rem;
+            flex-wrap: wrap;
+        }
+
+        .status-node {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 0.8rem 1.4rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            min-width: 260px;
+            transition: var(--transition);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(10px);
+        }
+
+        .status-node:hover {
+            border-color: var(--border-hover);
+            transform: translateY(-2px);
+        }
+
+        .status-icon {
+            font-size: 1.4rem;
+        }
+
+        .status-details {
+            flex-grow: 1;
+            text-align: left;
+        }
+
+        .status-title {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+
+        .status-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+        }
+
+        .status-badge {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .badge-standby {
+            background: rgba(245, 158, 11, 0.1);
+            color: #F59E0B;
+            border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
+        .badge-online {
+            background: rgba(16, 185, 129, 0.1);
+            color: #10B981;
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            animation: pulse-border 1.5s infinite;
+        }
+
+        @keyframes pulse-border {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+            70% { box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        .pulse-dot {
+            width: 7px;
+            height: 7px;
+            background-color: currentColor;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .pulse-dot.online {
+            animation: pulse-opacity 1s infinite alternate;
+        }
+
+        @keyframes pulse-opacity {
+            0% { opacity: 0.4; }
+            100% { opacity: 1; }
+        }
+
+        /* ── DYNAMIC APP WORKSPACE ─────────────────────────────────────────────── */
+        .workspace {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 4rem;
+            overflow: hidden;
+            backdrop-filter: blur(15px);
+            transition: var(--transition);
+        }
+
+        .workspace:hover {
+            border-color: rgba(108, 99, 255, 0.22);
+            box-shadow: var(--shadow-glow);
+        }
+
+        .workspace-header {
+            background: rgba(10, 10, 24, 0.7);
+            border-bottom: 1px solid var(--border);
+            padding: 0.75rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .workspace-tabs {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .w-tab {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-secondary);
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            font-size: 0.85rem;
+            padding: 0.5rem 1.2rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .w-tab:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .w-tab.active {
+            background: rgba(108, 99, 255, 0.08);
+            border-color: rgba(108, 99, 255, 0.25);
+            color: #8B83FF;
+        }
+
+        .w-tab.active[data-target="visualizer"] {
+            background: rgba(0, 210, 255, 0.08);
+            border-color: rgba(0, 210, 255, 0.25);
+            color: #00D2FF;
+        }
+
+        .workspace-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+        }
+
+        .w-btn {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: 0.95rem;
+        }
+
+        .w-btn:hover {
+            background: rgba(255, 255, 255, 0.07);
+            color: var(--text-primary);
+            border-color: var(--border-hover);
+        }
+
+        .workspace-content {
+            position: relative;
+            width: 100%;
+            height: 820px;
+            background: #090916;
+        }
+
+        .app-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: none;
+        }
+
+        .app-iframe.active {
+            display: block;
+        }
+
+        /* Server Offline Placeholder inside iframe workspace */
+        .offline-placeholder {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem;
+            text-align: center;
+            background: radial-gradient(circle at center, #0f0f23 0%, #060613 100%);
+        }
+
+        .placeholder-icon {
+            font-size: 4rem;
+            margin-bottom: 1.5rem;
+            animation: float 4s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+
+        .offline-placeholder h3 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 0.8rem;
+            color: #FFFFFF;
+        }
+
+        .offline-placeholder p {
+            color: var(--text-secondary);
+            font-size: 0.92rem;
+            max-width: 500px;
+            margin-bottom: 2rem;
+            line-height: 1.5;
+        }
+
+        /* ── TERMINAL CODE BOARDS ──────────────────────────────────────────────── */
+        .terminal-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 4rem;
+        }
+
+        .terminal-card {
+            background: rgba(10, 10, 24, 0.8);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+        }
+
+        .terminal-card:hover {
+            border-color: var(--border-hover);
+            box-shadow: var(--shadow-secondary);
+        }
+
+        .terminal-header {
+            background: rgba(255, 255, 255, 0.02);
+            border-bottom: 1px solid var(--border);
+            padding: 0.6rem 1.2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .terminal-dots {
+            display: flex;
+            gap: 5px;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+        .dot-red { background-color: #EF4444; }
+        .dot-yellow { background-color: #F59E0B; }
+        .dot-green { background-color: #10B981; }
+
+        .terminal-title {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+
+        .terminal-body {
+            padding: 1.2rem;
+            font-family: 'Fira Code', monospace;
+            font-size: 0.8rem;
+            color: #E2E8F0;
+            background-color: #060613;
+            text-align: left;
+            position: relative;
+        }
+
+        .cmd-line {
+            margin-bottom: 0.8rem;
+            line-height: 1.5;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .cmd-prompt {
+            color: #8B83FF;
+            margin-right: 0.6rem;
+            user-select: none;
+        }
+
+        .cmd-text {
+            word-break: break-all;
+            flex-grow: 1;
+        }
+
+        .cmd-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--text-secondary);
+            font-size: 0.72rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: var(--transition);
+            font-family: 'Inter', sans-serif;
+            margin-left: 0.5rem;
+        }
+
+        .cmd-btn:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .terminal-desc {
+            padding: 0.8rem 1.2rem;
+            background: rgba(255, 255, 255, 0.01);
+            border-top: 1px solid rgba(255, 255, 255, 0.02);
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* ── FEATURE SHOWCASE ──────────────────────────────────────────────────── */
+        .showcase-title {
+            text-align: center;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 800;
+            margin-bottom: 2rem;
+            color: #FFFFFF;
+            letter-spacing: -0.5px;
+        }
+
+        .grid-features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 4rem;
+        }
+
+        .feature-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.6rem;
+            transition: var(--transition);
+            text-align: left;
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: transparent;
+            transition: var(--transition);
+        }
+
+        .feature-card:hover {
+            border-color: rgba(108, 99, 255, 0.4);
+            box-shadow: var(--shadow-glow);
+            transform: translateY(-3px) scale(1.01);
+        }
+
+        .feature-card:hover::before {
+            background: var(--gradient-1);
+        }
+
+        .feature-icon {
+            font-size: 1.8rem;
+            margin-bottom: 0.8rem;
+            display: inline-block;
+        }
+
+        .feature-name {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: #FFFFFF;
+            margin-bottom: 0.5rem;
+        }
+
+        .feature-desc {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        /* ── FOOTER ───────────────────────────────────────────────────────────── */
+        footer {
+            text-align: center;
+            padding: 3rem 0;
+            margin-top: 4rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.03);
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+
+        footer p {
+            margin-bottom: 0.5rem;
+        }
+
+        .footer-logo {
+            font-family: 'Outfit', sans-serif;
+            font-weight: 700;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .dot-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            background-color: var(--success);
+        }
+
+        /* Toast feedback */
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: rgba(10, 10, 24, 0.9);
+            border: 1px solid var(--primary);
+            box-shadow: var(--shadow-glow);
+            color: white;
+            padding: 0.8rem 1.5rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            z-index: 1000;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s ease;
+            pointer-events: none;
+            backdrop-filter: blur(10px);
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- HEADER -->
+        <header>
+            <div class="logo-container">
+                <div class="logo-symbol">S</div>
+                <div style="text-align: left;">
+                    <div class="logo-text">Synapse <span style="font-weight: 300; color: #00D2FF;">Suite</span></div>
+                    <div class="logo-sub">Production Console</div>
+                </div>
+            </div>
+            <div class="nav-links">
+                <a href="#" class="nav-link active" onclick="switchTab('tutor'); setTutorPage('topic_selection')">Topics</a>
+                <a href="#" class="nav-link" onclick="switchTab('tutor'); setTutorPage('assessment')">Assessment</a>
+                <a href="#" class="nav-link" onclick="switchTab('tutor'); setTutorPage('tutor')">Tutor</a>
+                <a href="#" class="nav-link" onclick="switchTab('tutor'); setTutorPage('dashboard')">Dashboard</a>
+                <a href="#" class="nav-link" onclick="switchTab('visualizer')">Visual Engine</a>
+            </div>
+        </header>
+
+        <!-- HERO SECTION -->
+        <div class="hero">
+            <div class="hero-tag">Gen AI Hackathon 2026 · Team A2</div>
+            <h1>Premium Product Console</h1>
+            <p>
+                Experience **Synapse AI Tutor** & **Visual Engine** unified in a single, high-fidelity startup workspace. 
+                Ingest textbooks with GraphRAG, master concepts adaptively, and interact with step-by-step algorithm animations.
+            </p>
+        </div>
+
+        <!-- STATUS BAR -->
+        <div class="status-bar">
+            <!-- Port 8501 Status -->
+            <div class="status-node" id="status-node-tutor">
+                <span class="status-icon">🌐</span>
+                <div class="status-details">
+                    <div class="status-title">Synapse AI Tutor</div>
+                    <div class="status-name">Port 8501</div>
+                </div>
+                <span class="status-badge badge-standby" id="badge-tutor">
+                    <span class="pulse-dot" id="dot-tutor"></span>
+                    <span id="label-tutor">Checking</span>
+                </span>
+            </div>
+            
+            <!-- Port 8502 Status -->
+            <div class="status-node" id="status-node-engine">
+                <span class="status-icon">🧠</span>
+                <div class="status-details">
+                    <div class="status-title">Visual Engine</div>
+                    <div class="status-name">Port 8502</div>
+                </div>
+                <span class="status-badge badge-standby" id="badge-engine">
+                    <span class="pulse-dot" id="dot-engine"></span>
+                    <span id="label-engine">Checking</span>
+                </span>
+            </div>
+        </div>
+
+        <!-- UNIFIED STREAMLIT IFRAME WORKSPACE -->
+        <div class="workspace">
+            <div class="workspace-header">
+                <div class="workspace-tabs">
+                    <button class="w-tab active" data-target="tutor" onclick="switchTab('tutor')">
+                        <span>🌐</span> Synapse AI Tutor (Port 8501)
+                    </button>
+                    <button class="w-tab" data-target="visualizer" onclick="switchTab('visualizer')">
+                        <span>🧠</span> Visual Engine (Port 8502)
+                    </button>
+                    <button class="w-tab" data-target="launcher" onclick="switchTab('launcher')">
+                        <span>⚙️</span> Server Launcher Guide
+                    </button>
+                </div>
+                <div class="workspace-actions">
+                    <button class="w-btn" title="Refresh Application" onclick="refreshWorkspace()">↺</button>
+                    <button class="w-btn" title="Open in New Tab" onclick="openCurrentTabInNewWindow()">↗</button>
+                </div>
+            </div>
+            <div class="workspace-content" id="workspace-content-area">
+                <!-- Tutor App IFrame -->
+                <iframe id="iframe-tutor" class="app-iframe active" src="http://localhost:8501"></iframe>
+                
+                <!-- Visualizer App IFrame -->
+                <iframe id="iframe-visualizer" class="app-iframe" src="http://localhost:8502"></iframe>
+                
+                <!-- Setup Guide Panel (Shows if servers are offline or selected) -->
+                <div id="iframe-launcher" class="app-iframe" style="overflow-y: auto;">
+                    <div class="offline-placeholder" style="height: auto; min-height: 100%; justify-content: flex-start; padding: 2rem;">
+                        <span class="placeholder-icon">⚙️</span>
+                        <h3>Local Server Workspace Control</h3>
+                        <p>Configure and launch both subsystem servers to activate full interactive embeddings inside this tab.</p>
+                        
+                        <div class="terminal-grid" style="width: 100%; max-width: 900px; margin-top: 1rem;">
+                            <!-- Tutor launch -->
+                            <div class="terminal-card">
+                                <div class="terminal-header">
+                                    <div class="terminal-dots">
+                                        <div class="dot dot-red"></div>
+                                        <div class="dot dot-yellow"></div>
+                                        <div class="dot dot-green"></div>
+                                    </div>
+                                    <span class="terminal-title">Launch Synapse AI Tutor</span>
+                                </div>
+                                <div class="terminal-body">
+                                    <div class="cmd-line">
+                                        <span class="cmd-prompt">A2&gt;</span>
+                                        <span class="cmd-text" id="cmd-tutor-dir">cd synapse_ai_tutor</span>
+                                        <button class="cmd-btn" onclick="copyText('cmd-tutor-dir')">Copy</button>
+                                    </div>
+                                    <div class="cmd-line">
+                                        <span class="cmd-prompt">A2&gt;</span>
+                                        <span class="cmd-text" id="cmd-tutor-run">python -m streamlit run app.py --server.port 8501</span>
+                                        <button class="cmd-btn" onclick="copyText('cmd-tutor-run')">Copy</button>
+                                    </div>
+                                </div>
+                                <div class="terminal-desc">
+                                    <span>🚀</span> Standard Port 8501 · Ingestion vector active
+                                </div>
+                            </div>
+                            
+                            <!-- Engine launch -->
+                            <div class="terminal-card">
+                                <div class="terminal-header">
+                                    <div class="terminal-dots">
+                                        <div class="dot dot-red"></div>
+                                        <div class="dot dot-yellow"></div>
+                                        <div class="dot dot-green"></div>
+                                    </div>
+                                    <span class="terminal-title">Launch Visual Engine</span>
+                                </div>
+                                <div class="terminal-body">
+                                    <div class="cmd-line">
+                                        <span class="cmd-prompt">A2&gt;</span>
+                                        <span class="cmd-text" id="cmd-engine-dir">cd visual_engine</span>
+                                        <button class="cmd-btn" onclick="copyText('cmd-engine-dir')">Copy</button>
+                                    </div>
+                                    <div class="cmd-line">
+                                        <span class="cmd-prompt">A2&gt;</span>
+                                        <span class="cmd-text" id="cmd-engine-run">python -m streamlit run main.py --server.port 8502</span>
+                                        <button class="cmd-btn" onclick="copyText('cmd-engine-run')">Copy</button>
+                                    </div>
+                                </div>
+                                <div class="terminal-desc">
+                                    <span>🧠</span> Standard Port 8502 · TTS & crossfade enabled
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- FEATURE GRID SHOWCASE -->
+        <h2 class="showcase-title">Core Subsystem Architecture</h2>
+        <div class="grid-features">
+            <!-- Card 1 -->
+            <div class="feature-card">
+                <span class="feature-icon">🔍</span>
+                <h3 class="feature-name">GraphRAG Retrieval</h3>
+                <p class="feature-desc">
+                    Hybrid knowledge graph-expanded vector retrieval. Identifies concept vertices from student query nodes, extracts 2-hop prerequisite links using NetworkX, and boosts chunk results.
+                </p>
+            </div>
+            
+            <!-- Card 2 -->
+            <div class="feature-card">
+                <span class="feature-icon">📈</span>
+                <h3 class="feature-name">Adaptive Assessment</h3>
+                <p class="feature-desc">
+                    Custom 15-question diagnostic covering Beginner, Intermediate, and Advanced tiers. Determines initial proficiency profiles and dynamically detects local knowledge gaps.
+                </p>
+            </div>
+            
+            <!-- Card 3 -->
+            <div class="feature-card">
+                <span class="feature-icon">🎙️</span>
+                <h3 class="feature-name">Local Voice Layer</h3>
+                <p class="feature-desc">
+                    Provides zero-friction hands-free learning. Powered by Faster-Whisper local voice speech-to-text and ElevenLabs or gTTS speech synthesis.
+                </p>
+            </div>
+            
+            <!-- Card 4 -->
+            <div class="feature-card">
+                <span class="feature-icon">🪟</span>
+                <h3 class="feature-name">Frosted Glassmorphism Theme</h3>
+                <p class="feature-desc">
+                    Premium dark theme featuring a tailored HSL dynamic color scheme, outfit geometric headers, and dynamic animations designed for modern technical products.
+                </p>
+            </div>
+            
+            <!-- Card 5 -->
+            <div class="feature-card">
+                <span class="feature-icon">🗺️</span>
+                <h3 class="feature-name">Offline Cytoscape Roadmaps</h3>
+                <p class="feature-desc">
+                    Generates beautifully structured tree layouts for personalized studies. Features completely self-contained local copies of cytoscape.js and dagre layout plugins for 100% offline portability.
+                </p>
+            </div>
+            
+            <!-- Card 6 -->
+            <div class="feature-card">
+                <span class="feature-icon">🎬</span>
+                <h3 class="feature-name">Visual Animation Engine</h3>
+                <p class="feature-desc">
+                    Illustrates intricate structures (RAG flows, attention weights, recursive stack trees) step-by-step with synchronized audio narration and PIL crossfades.
+                </p>
+            </div>
+        </div>
+
+        <!-- FOOTER -->
+        <footer>
+            <div class="footer-logo">
+                <span class="dot-indicator"></span> Synapse Suite Console
+            </div>
+            <p>Built with ❤️ by Team A2 for Gen AI Hackathon 2026</p>
+            <p style="font-size: 0.72rem; opacity: 0.6;">HTML5 · Vanilla CSS3 · Native JavaScript · Streamlit Sub-System Ports 8501 & 8502</p>
+        </footer>
+    </div>
+
+    <!-- Toast Component -->
+    <div id="toast-el" class="toast">Command copied to clipboard!</div>
+
+    <!-- MAIN CONTROL JAVASCRIPT -->
+    <script>
+        let currentActiveTab = 'tutor';
+        const ports = {
+            tutor: 8501,
+            visualizer: 8502
+        };
+
+        // Real-time server port ping sensor
+        function checkPortStatus(port, key) {
+            const url = `http://localhost:${port}`;
+            const badge = document.getElementById(`badge-${key}`);
+            const dot = document.getElementById(`dot-${key}`);
+            const label = document.getElementById(`label-${key}`);
+            
+            // Fast ping via image load check to bypass standard CORS preflights
+            const img = new Image();
+            img.onload = function() {
+                updateBadgeStatus(badge, dot, label, true);
+            };
+            img.onerror = function() {
+                // If it triggers onerror, it could be a CORS issue OR actually offline.
+                // We do a fallback fetch request with no-cors mode to confirm.
+                fetch(url, { mode: 'no-cors', cache: 'no-store' })
+                    .then(() => {
+                        updateBadgeStatus(badge, dot, label, true);
+                    })
+                    .catch(() => {
+                        updateBadgeStatus(badge, dot, label, false);
+                    });
+            };
+            // Append small random param to avoid static cache
+            img.src = `${url}/favicon.ico?t=${Date.now()}`;
+        }
+
+        function updateBadgeStatus(badge, dot, label, isOnline) {
+            if (isOnline) {
+                badge.className = 'status-badge badge-online';
+                dot.className = 'pulse-dot online';
+                label.textContent = 'ONLINE';
+            } else {
+                badge.className = 'status-badge badge-standby';
+                dot.className = 'pulse-dot';
+                label.textContent = 'STANDBY';
+            }
+        }
+
+        // Run ping checkers periodically
+        function runSensors() {
+            checkPortStatus(ports.tutor, 'tutor');
+            checkPortStatus(ports.visualizer, 'engine');
+        }
+
+        setInterval(runSensors, 5000);
+        window.addEventListener('DOMContentLoaded', runSensors);
+
+        // Switch workspace tabs
+        function switchTab(target) {
+            currentActiveTab = target;
+            
+            // Update tab button class
+            const tabs = document.querySelectorAll('.w-tab');
+            tabs.forEach(tab => {
+                if (tab.getAttribute('data-target') === target) {
+                    tab.classList.add('active');
+                } else {
+                    tab.classList.remove('active');
+                }
+            });
+
+            // Update visible iframe
+            const iframes = document.querySelectorAll('.app-iframe');
+            iframes.forEach(iframe => {
+                if (iframe.getAttribute('id') === `iframe-${target}`) {
+                    iframe.classList.add('active');
+                } else {
+                    iframe.classList.remove('active');
+                }
+            });
+        }
+
+        // Refresh active workspace tab
+        function refreshWorkspace() {
+            if (currentActiveTab === 'launcher') return;
+            const activeFrame = document.getElementById(`iframe-${currentActiveTab}`);
+            if (activeFrame) {
+                activeFrame.src = activeFrame.src;
+                showToast("Application view reloaded!");
+            }
+        }
+
+        // Open active view in new window
+        function openCurrentTabInNewWindow() {
+            if (currentActiveTab === 'launcher') return;
+            const port = ports[currentActiveTab];
+            if (port) {
+                window.open(`http://localhost:${port}`, '_blank');
+            }
+        }
+
+        // Copy text helper
+        function copyText(elementId) {
+            const el = document.getElementById(elementId);
+            if (!el) return;
+            
+            const textToCopy = el.textContent;
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                showToast("Command copied to clipboard!");
+            }).catch(err => {
+                console.error("Copy failed: ", err);
+            });
+        }
+
+        // Toast trigger
+        function showToast(message) {
+            const toast = document.getElementById("toast-el");
+            toast.textContent = message;
+            toast.classList.add("show");
+            
+            setTimeout(() => {
+                toast.classList.remove("show");
+            }, 2500);
+        }
+
+        // Set tutor page
+        function setTutorPage(pageName) {
+            const iframe = document.getElementById('iframe-tutor');
+            if (iframe) {
+                iframe.src = `http://localhost:${ports.tutor}/?page=${pageName}`;
+            }
+            
+            // Update active state in nav
+            const links = document.querySelectorAll('.nav-link');
+            links.forEach(link => {
+                link.classList.remove('active');
+                if(link.getAttribute('onclick') && link.getAttribute('onclick').includes(pageName)) {
+                    link.classList.add('active');
+                }
+            });
+        }
+    </script>
+</body>
+</html>

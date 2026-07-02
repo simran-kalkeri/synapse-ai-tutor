@@ -1,0 +1,35 @@
+﻿__pycache__/
+*.pyc
+*.pyo
+.env
+*.env
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.DS_Store
+
+# Streamlit secrets (contains API keys - never commit)
+.streamlit/secrets.toml
+.streamlit/credentials.toml
+audio_cache/
+
+# Credentials and Secrets
+client_secret_*.json
+credentials.json
+*_credentials.json
+*.pem
+*.key
+
+# Local Data and Logs
+*.log
+*.sqlite
+*.db
+synapse_ai_tutor/data/faiss_index.bin
+synapse_ai_tutor/data/chunks.pkl
+synapse_ai_tutor/data/notes/
+synapse_ai_tutor/data/books/
+synapse_ai_tutor/data/progress.json
+synapse_ai_tutor/data/student_memory.json
+synapse_ai_tutor/data/knowledge_graph.json
