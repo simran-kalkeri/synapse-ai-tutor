@@ -27,7 +27,8 @@ from storage.base import (
 
 logger = get_logger(__name__)
 
-_lock = threading.Lock()
+# Each repository gets its own lock (H-6 fix: was one global lock serializing all I/O).
+# This allows concurrent writes to different files.
 
 
 # ── Atomic JSON I/O ─────────────────────────────────────────────────────────
@@ -75,19 +76,20 @@ class JSONProgressRepository(ProgressRepository):
     def __init__(self):
         settings = get_settings()
         self._filepath = str(settings.DATA_DIR / "progress.json")
+        self._lock = threading.Lock()  # per-repository lock
 
     def get_progress(self, username: str) -> dict:
-        with _lock:
+        with self._lock:
             data = _load_json(self._filepath)
             return data.get(username, {})
 
     def get_topic_progress(self, username: str, topic: str) -> dict:
-        with _lock:
+        with self._lock:
             data = _load_json(self._filepath)
             return data.get(username, {}).get(topic, {})
 
     def update_topic_progress(self, username: str, topic: str, updates: dict) -> None:
-        with _lock:
+        with self._lock:
             data = _load_json(self._filepath)
             if username not in data:
                 data[username] = {}
@@ -97,7 +99,7 @@ class JSONProgressRepository(ProgressRepository):
             _save_json(self._filepath, data)
 
     def get_mastery_scores(self, username: str) -> dict[str, dict]:
-        with _lock:
+        with self._lock:
             data = _load_json(self._filepath)
             user_data = data.get(username, {})
             scores = {}
@@ -127,14 +129,15 @@ class JSONMemoryRepository(MemoryRepository):
     def __init__(self):
         settings = get_settings()
         self._filepath = str(settings.DATA_DIR / "student_memory.json")
+        self._lock = threading.Lock()  # per-repository lock
 
     def get_memory(self, username: str) -> dict:
-        with _lock:
+        with self._lock:
             data = _load_json(self._filepath)
             return data.get(username, {})
 
     def get_conversation_history(self, username: str, topic: str) -> list[dict]:
-        with _lock:
+        with self._lock:
             data = _load_json(self._filepath)
             user = data.get(username, {})
             conversations = user.get("conversations", {})
@@ -143,7 +146,7 @@ class JSONMemoryRepository(MemoryRepository):
     def add_conversation_message(
         self, username: str, topic: str, role: str, content: str
     ) -> None:
-        with _lock:
+        with self._lock:
             data = _load_json(self._filepath)
             if username not in data:
                 data[username] = {}
@@ -165,12 +168,12 @@ class JSONMemoryRepository(MemoryRepository):
             _save_json(self._filepath, data)
 
     def get_quiz_history(self, username: str) -> list[dict]:
-        with _lock:
+        with self._lock:
             data = _load_json(self._filepath)
             return data.get(username, {}).get("quiz_history", [])
 
     def add_quiz_result(self, username: str, result: dict) -> None:
-        with _lock:
+        with self._lock:
             data = _load_json(self._filepath)
             if username not in data:
                 data[username] = {}
@@ -181,12 +184,12 @@ class JSONMemoryRepository(MemoryRepository):
             _save_json(self._filepath, data)
 
     def get_learning_events(self, username: str) -> list[dict]:
-        with _lock:
+        with self._lock:
             data = _load_json(self._filepath)
             return data.get(username, {}).get("learning_events", [])
 
     def add_learning_event(self, username: str, event: dict) -> None:
-        with _lock:
+        with self._lock:
             data = _load_json(self._filepath)
             if username not in data:
                 data[username] = {}
@@ -271,9 +274,10 @@ class JSONRoadmapRepository(RoadmapRepository):
     def __init__(self):
         settings = get_settings()
         self._filepath = str(settings.DATA_DIR / "progress.json")
+        self._lock = threading.Lock()  # per-repository lock
 
     def save_roadmap(self, username: str, topic: str, roadmap: list) -> None:
-        with _lock:
+        with self._lock:
             data = _load_json(self._filepath)
             if username not in data:
                 data[username] = {}
@@ -284,12 +288,12 @@ class JSONRoadmapRepository(RoadmapRepository):
             _save_json(self._filepath, data)
 
     def load_roadmap(self, username: str, topic: str) -> list:
-        with _lock:
+        with self._lock:
             data = _load_json(self._filepath)
             return data.get(username, {}).get(topic, {}).get("roadmap", [])
 
     def update_step(self, username: str, topic: str, step_name: str, status: str) -> None:
-        with _lock:
+        with self._lock:
             data = _load_json(self._filepath)
             roadmap = data.get(username, {}).get(topic, {}).get("roadmap", [])
             if not roadmap:

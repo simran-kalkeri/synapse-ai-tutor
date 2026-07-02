@@ -2,14 +2,13 @@
 Learning Roadmap Generator for Synapse AI Tutor.
 Generates personalized learning paths based on topic, level, and knowledge gaps.
 Uses the prerequisite graph from gap_detector.py.
+
+Persistence is delegated to storage.json_store.JSONRoadmapRepository which
+uses atomic writes and a threading.Lock (no direct file I/O here).
 """
 
-import json
-import os
-from datetime import datetime
 from backend.gap_detector import PREREQUISITE_MAP, get_prerequisites, get_key_concepts
 
-PROGRESS_FILE = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "progress.json")
 
 
 # ── Roadmap Generation ────────────────────────────────────────────────────────
@@ -79,12 +78,13 @@ def generate_roadmap(topic: str, level: str, gaps: list) -> list:
             order += 1
 
     # Phase 3: Key concepts of the topic itself
+    # Advanced learners get ALL key concepts; beginners get a focused subset.
     if level == "Beginner":
         concepts_to_add = key_concepts[:3]
     elif level == "Intermediate":
-        concepts_to_add = key_concepts[:4]
-    else:
-        concepts_to_add = key_concepts[:2]
+        concepts_to_add = key_concepts[:5]
+    else:  # Advanced
+        concepts_to_add = key_concepts  # all concepts for advanced learners
 
     for concept in concepts_to_add:
         if concept not in seen:
@@ -238,54 +238,28 @@ def _get_step_description(concept: str, step_type: str) -> str:
     return descriptions.get(concept, default_descriptions.get(step_type, f"Study {concept}"))
 
 
-# ── Roadmap Persistence ───────────────────────────────────────────────────────
+# ── Roadmap Persistence (delegated to storage layer) ──────────────────────────────────
+
 
 def save_roadmap(username: str, topic: str, roadmap: list):
-    """Save a user's roadmap to progress.json."""
-    data = _load_progress()
-    if username not in data:
-        data[username] = {}
-    if topic not in data[username]:
-        data[username][topic] = {}
-    data[username][topic]["roadmap"] = roadmap
-    data[username][topic]["roadmap_generated_at"] = datetime.now().isoformat()
-    _save_progress(data)
+    """Save a user's roadmap. Delegates to JSONRoadmapRepository."""
+    from storage.json_store import JSONRoadmapRepository
+    JSONRoadmapRepository().save_roadmap(username, topic, roadmap)
 
 
 def load_roadmap(username: str, topic: str) -> list:
-    """Load a user's roadmap from progress.json."""
-    data = _load_progress()
-    user_data = data.get(username, {})
-    topic_data = user_data.get(topic, {})
-    return topic_data.get("roadmap", [])
+    """Load a user's roadmap. Delegates to JSONRoadmapRepository."""
+    from storage.json_store import JSONRoadmapRepository
+    return JSONRoadmapRepository().load_roadmap(username, topic)
 
 
 def update_roadmap_step(username: str, topic: str, step_name: str, new_status: str):
     """
-    Update the status of a roadmap step.
-    Also advances 'current' marker to the next locked step.
+    Update the status of a roadmap step and advance the 'current' marker.
+    Delegates to JSONRoadmapRepository.
     """
-    data = _load_progress()
-    roadmap = data.get(username, {}).get(topic, {}).get("roadmap", [])
-
-    if not roadmap:
-        return
-
-    for step in roadmap:
-        if step["name"] == step_name:
-            step["status"] = new_status
-            step["is_current"] = False
-
-    # Find next locked step and mark as current
-    if new_status == "complete":
-        for step in roadmap:
-            if step["status"] == "locked":
-                step["status"] = "current"
-                step["is_current"] = True
-                break
-
-    data[username][topic]["roadmap"] = roadmap
-    _save_progress(data)
+    from storage.json_store import JSONRoadmapRepository
+    JSONRoadmapRepository().update_step(username, topic, step_name, new_status)
 
 
 def get_roadmap_progress(username: str, topic: str) -> dict:
@@ -295,31 +269,13 @@ def get_roadmap_progress(username: str, topic: str) -> dict:
         return {"total": 0, "complete": 0, "current": 0, "locked": 0, "percentage": 0}
 
     complete = sum(1 for s in roadmap if s["status"] == "complete")
-    current = sum(1 for s in roadmap if s["status"] == "current")
-    locked = sum(1 for s in roadmap if s["status"] == "locked")
+    current  = sum(1 for s in roadmap if s["status"] == "current")
+    locked   = sum(1 for s in roadmap if s["status"] == "locked")
 
     return {
-        "total": len(roadmap),
-        "complete": complete,
-        "current": current,
-        "locked": locked,
-        "percentage": int((complete / len(roadmap)) * 100) if roadmap else 0
+        "total":      len(roadmap),
+        "complete":   complete,
+        "current":    current,
+        "locked":     locked,
+        "percentage": int((complete / len(roadmap)) * 100) if roadmap else 0,
     }
-
-
-# ── Internal Helpers ──────────────────────────────────────────────────────────
-
-def _load_progress() -> dict:
-    if os.path.exists(PROGRESS_FILE):
-        try:
-            with open(PROGRESS_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError):
-            return {}
-    return {}
-
-
-def _save_progress(data: dict):
-    os.makedirs(os.path.dirname(PROGRESS_FILE), exist_ok=True)
-    with open(PROGRESS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)

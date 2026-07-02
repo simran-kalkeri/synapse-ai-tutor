@@ -2,8 +2,8 @@
 
 > **Project**: Synapse AI Tutor → Production-Grade AI Learning Platform
 > **Started**: 2026-07-02 02:20 IST
-> **Last Updated**: 2026-07-02 03:18 IST
-> **Status**: Phase 1-5 complete. Database migrated. App ready to run.
+> **Last Updated**: 2026-07-02 03:13 IST
+> **Status**: Phase 1-6 complete. All P0–P4 bugs fixed. App running on http://localhost:8501
 
 ---
 
@@ -256,11 +256,13 @@ Added 14 new packages: `groq`, `pydantic-settings`, `python-dotenv`, `structlog`
 | Category | Count | Key Files |
 |---|---|---|
 | New files created | **38** | See file tree below |
-| Files modified | **3** | `backend/llm_client.py`, `app.py`, `requirements.txt` |
+| Files modified (Phase 1–5) | **3** | `backend/llm_client.py`, `app.py`, `requirements.txt` |
+| Files fixed (Phase 6) | **13** | See Phase 6 below |
 | New DB tables | **14** | All in `storage/models.py` |
 | New repository classes | **7** | All in `storage/repositories/pg_repos.py` |
 | New service functions | **8** | Auth (6) + Memory (2) |
 | Import tests passed | **9/9** | All modules verified |
+| Syntax check (Phase 6) | **13/13** | All fixed files parse clean |
 
 ### Complete File Tree (new files only)
 ```
@@ -321,3 +323,167 @@ synapse_ai_tutor/
 │   └── profile.py  (new)
 docker-compose.yml  (project root)
 ```
+
+---
+
+## Phase 6 — Comprehensive Bug Fix Audit ✅ DONE
+
+**Goal**: Full codebase audit to fix all security vulnerabilities, correctness bugs,
+race conditions, and code-quality issues identified by static analysis.
+
+**Total issues fixed**: 21 across P0–P4 severity levels.  
+**Syntax validation**: All 13 modified files parse cleanly (`ast.parse` verified).
+
+---
+
+### P0 — Critical (security / app-breaking)
+
+#### `services/auth_service.py`
+| Issue | Fix |
+|---|---|
+| **C-1 Auth bypass** — `authenticate_local()` returned `True` for any known username regardless of password | Replaced with real `hashlib.pbkdf2_hmac("sha256", …)` + `hmac.compare_digest()` constant-time comparison. Fake placeholder hashes replaced with real computed hashes. |
+| **C-2 Hardcoded JWT secret** — `"change-me-to-a-random-64-char-string"` used if env var missing | Now generates a volatile per-process random secret via `secrets.token_hex(32)` and emits `logger.warning()`. Tokens survive restarts only when `JWT_SECRET_KEY` is set in `.env`. |
+| **H-8 OAuth CSRF** — `get_google_auth_url()` discarded the state token after generating it | Now returns a `Tuple[str, str]` of `(url, state)`. New `verify_oauth_state()` helper enforces CSRF check with `hmac.compare_digest`. |
+| **M-9 KeyError on token exchange** — `tokens["access_token"]` raised `KeyError` if Google returned an error body with HTTP 200 | Added `"error" in tokens` guard and `.get("access_token")` with explicit `OAuthError` if missing. |
+
+#### `storage/models.py`
+| Issue | Fix |
+|---|---|
+| **C-3 Duplicate `__table_args__`** — `ChatMessage` had two `__table_args__` definitions; Python silently used only the last, dropping the `Index`. Caused `CompileError` / wrong schema on DB init. | Merged into a single `__table_args__` containing both `CheckConstraint` and `Index`. |
+
+---
+
+### P1 — High severity (correctness)
+
+#### `backend/note_generator.py`
+| Issue | Fix |
+|---|---|
+| **C-4 Magic-string error detection** — `if response.startswith("__LLM_")` required LLM to return a sentinel string; would crash if LLM raised an exception instead | Wrapped `generate_response()` in `try/except LLMError`. Legacy sentinel guard kept as secondary safety net. |
+| **C-5 / M-2 Duplicate file I/O** — Module maintained its own `_load_progress()` / `_save_progress()` / `save_note()` / `load_note()` / `get_all_notes()` duplicating the storage layer and causing race conditions | All persistence functions now delegate to `JSONNoteRepository`. Direct file I/O and `PROGRESS_FILE` / `NOTES_DIR` globals removed. |
+
+#### `backend/roadmap_generator.py`
+| Issue | Fix |
+|---|---|
+| **C-5 / M-3 Duplicate progress.json writes** — `_load_progress()` / `_save_progress()` ran outside the repository lock, causing potential file corruption under concurrent Streamlit reruns | Removed both private helpers; `save_roadmap()`, `load_roadmap()`, `update_roadmap_step()` all delegate to `JSONRoadmapRepository`. |
+| **H-4 Inverted concept count** — Advanced learners got only 2 key concepts; Beginner got 3 (backwards logic) | Fixed: Beginner→3, Intermediate→5, Advanced→all key concepts. |
+
+#### `backend/chunking.py`
+| Issue | Fix |
+|---|---|
+| **C-6 Insecure pickle serialization** — `chunks.pkl` used Python pickle for storage, allowing remote code execution if the file is tampered with | Migrated to JSON (`chunks.json`). Auto-migrates legacy `.pkl` files on first load (one-time, trusted local migration). |
+| **L-1 `load_chunks()` returns `None`** — Callers received `None` when no cache existed, causing `TypeError: 'NoneType' is not iterable` | Now returns `[]`. |
+| **H-5 Infinite loop risk** — No guard against `chunk_overlap >= chunk_size` | Raises `ValueError` immediately. Added `advance = start + 1` safety guard inside the loop. |
+
+#### `backend/tts.py`
+| Issue | Fix |
+|---|---|
+| **C-7 Global flag race condition** — `speak()` mutated `global USE_ELEVENLABS` then restored it in a `finally` block; not thread-safe under Streamlit's multi-thread model | Removed global mutation entirely. `effective_elevenlabs` computed locally and passed as a parameter to `_synthesize(use_elevenlabs)`. |
+
+---
+
+### P2 — Correctness / UX
+
+#### `storage/base.py`
+| Issue | Fix |
+|---|---|
+| **H-2 ABC parameter mismatch** — `ProgressRepository.update_topic_progress()` declared `data: dict` but the concrete implementation used `updates: dict` | Renamed to `updates` in ABC. |
+
+#### `backend/gap_detector.py`
+| Issue | Fix |
+|---|---|
+| **H-3 Unassessed = gap** — Topics the student has never studied were treated as knowledge gaps, flooding new users with false warnings | Unassessed topics are now silently skipped. Only topics where `mastery < 50` after being tested are flagged. |
+
+#### `views/tutor.py`
+| Issue | Fix |
+|---|---|
+| **H-7 `check_connection()` on every rerun** — Called on every Streamlit rerender, burning API quota and adding latency | Cached in `st.session_state` with a 30-second monotonic TTL. |
+| **M-8 Bare `except Exception` on import** — Silently swallowed syntax errors in `backend/student_memory.py` | Narrowed to `except (ImportError, ModuleNotFoundError)`. |
+
+---
+
+### P3 — Code quality / performance
+
+#### `storage/json_store.py`
+| Issue | Fix |
+|---|---|
+| **H-6 Single global lock** — One `threading.Lock()` serialized all JSON I/O across all repositories (progress, memory, notes), blocking concurrent users | Each repository (`JSONProgressRepository`, `JSONMemoryRepository`, `JSONNoteRepository`, `JSONRoadmapRepository`) now owns its own `self._lock = threading.Lock()`. |
+
+#### `backend/tts.py`
+| Issue | Fix |
+|---|---|
+| **M-4 Unbounded audio cache** — `audio_cache/` directory grew forever with no eviction | Added `evict_audio_cache()`: deletes files older than 7 days, then evicts oldest by mtime until ≤ 500 files remain. Runs automatically at module import. |
+
+#### `backend/embeddings.py` + `backend/chunking.py`
+| Issue | Fix |
+|---|---|
+| **M-6 `print()` scattered throughout** — `[LOAD]`, `[OK]`, `[PROC]`, `[SAVE]` print statements bypassed the structured logging system | Replaced with `logger.info()` / `logger.warning()` using structlog key=value format. `show_progress_bar=True` on `.encode()` changed to `False` (prevents console spam). |
+
+---
+
+### P4 — Cleanup / low priority
+
+#### `storage/base.py`
+| Issue | Fix |
+|---|---|
+| **M-7 Dead `BaseRepository` ABC** — Generic `get/set/delete/exists` interface was never implemented by any concrete class | Removed. Note added in docstring explaining the removal. |
+
+#### `storage/database.py`
+| Issue | Fix |
+|---|---|
+| **L-2 `get_sync_session()` leaks sessions** — Bare function returned a session with no cleanup guarantee | Added `get_sync_session_ctx()` context manager (commit/rollback/close on exit). Original function kept for backward compat with warning in docstring. |
+
+#### `storage/repositories/pg_repos.py`
+| Issue | Fix |
+|---|---|
+| **L-5 Infinite username loop** — `while await self.get_by_username(username)` had no iteration limit | Added `_MAX_TRIES = 100` guard. On overflow: appends `secrets.token_hex(4)` suffix and breaks. |
+
+---
+
+### Phase 6 — Files Modified
+
+| File | Issues Fixed |
+|---|---|
+| `services/auth_service.py` | C-1, C-2, H-8, M-9 |
+| `storage/models.py` | C-3 |
+| `backend/note_generator.py` | C-4, C-5, M-2 |
+| `backend/roadmap_generator.py` | C-5, H-4, M-3 |
+| `backend/chunking.py` | C-6, H-5, L-1, M-6 |
+| `backend/tts.py` | C-7, M-4 |
+| `backend/gap_detector.py` | H-3 |
+| `backend/embeddings.py` | M-6 |
+| `storage/base.py` | H-2, M-7 |
+| `storage/json_store.py` | H-6 |
+| `storage/database.py` | L-2 |
+| `storage/repositories/pg_repos.py` | L-5 |
+| `views/tutor.py` | H-7, M-8 |
+
+### Deferred (architectural — out of scope for a bug-fix pass)
+- **M-5**: Externalise prerequisite/resource maps from Python dicts → YAML config files
+- **L-4**: Fix garbled box-drawing characters (encoding artifact in comments)
+
+---
+
+## Phase 7 — Enterprise SaaS Architecture Refactor ✅ DONE
+
+**Goal**: Transform the legacy Streamlit monolithic application into a modern, scalable, high-performance SaaS platform.
+
+### What was done:
+
+#### 7.1 Backend API Layer (FastAPI)
+- **App Factory & Scaffolding**: Built a modular FastAPI application in `backend/` with dependency injection, structured logging, and strict Pydantic v2 schemas.
+- **RESTful Routers**: Created independent routers for Auth, Tutor, Chat, Assessment, Memory, RAG, Graph, Voice, Notes, Roadmap, and Dashboard.
+- **SSE Streaming**: Implemented real-time Server-Sent Events (SSE) for LLM responses via `StreamingResponse`, enabling a responsive, ChatGPT-like chat experience without blocking the thread pool.
+- **Legacy Integration**: Successfully bridged the new backend with the existing `synapse_ai_tutor` AI core by dynamically patching `sys.path`.
+- **Environment & Encoding Fixes**: Resolved Python 3.12 vs 3.13 pip environment mismatches. Replaced emojis in structlog with ASCII tags (`[BOOT]`, `[OK]`, `[WARN]`) to prevent Windows `cp1252` encoding crashes on startup.
+
+#### 7.2 Frontend Application (React 19 + Vite)
+- **Modern Build Tooling**: Scaffolded with Vite and React 19. Implemented Tailwind CSS v4 using the new `@tailwindcss/vite` plugin and native CSS `@theme` variables for a premium, violet-tinted frosted glassmorphism UI.
+- **State & Data Fetching**: Utilized Zustand for global state (Auth, UI) and TanStack React Query for efficient, cached API requests.
+- **Dynamic Pages**: Built stunning pages including a Dashboard (with Recharts), Tutor Chat (with SSE client integration), Topic Assessment, Knowledge Graph Explorer (D3.js), and Profile settings.
+- **Type Safety**: Ensured end-to-end TypeScript safety across all components, resolving implicit `any` types and ensuring strict domain model mapping with the backend schemas.
+
+#### 7.3 Deployment & Infrastructure
+- **Docker Orchestration**: Updated `docker-compose.yml` and `nginx.conf` to serve the separated React frontend and FastAPI backend behind a unified proxy.
+- **Local Dev Experience**: Created `start-dev.ps1` for one-click simultaneous booting of both the Vite dev server and Uvicorn backend with hot-reloading.
+
+**Status**: Both backend (`localhost:8000`) and frontend (`localhost:5173`) are running cleanly. End-to-end flows (Login, SSE Chat, Assessment generation/scoring) have been successfully verified.

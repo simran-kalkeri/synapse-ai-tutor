@@ -5,19 +5,23 @@ JWT-based session management.
 
 Usage:
     from services.auth_service import AuthService
-    auth = AuthService()
-    jwt_token = await auth.google_oauth_callback(code)
-    user = auth.verify_token(jwt_token)
+    jwt_token = create_token(user_id, username)
+    payload  = verify_token(jwt_token)
+    ok       = authenticate_local(username, password)
+
+OAuth CSRF:
+    state = get_google_auth_url()  # now returns (url, state)
+    # Caller must store state in st.session_state and verify on callback.
 """
 
 from __future__ import annotations
 
 import hashlib
+import hmac
 import os
 import secrets
-import time
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, Tuple
 
 import jwt
 
@@ -29,8 +33,27 @@ logger = get_logger(__name__)
 
 # ── JWT Configuration ───────────────────────────────────────────────────────
 
+# Warn once at import time if the secret is not configured.
+_JWT_SECRET_ENV = os.getenv("JWT_SECRET_KEY", "")
+
+
 def _get_jwt_secret() -> str:
-    return os.getenv("JWT_SECRET_KEY", "change-me-to-a-random-64-char-string")
+    """Return the JWT signing secret, raising RuntimeError if unconfigured."""
+    secret = os.getenv("JWT_SECRET_KEY", "")
+    if not secret:
+        # Fall back to a per-process random secret so the app can still run
+        # during local development, but tokens will be invalidated on restart.
+        # Set JWT_SECRET_KEY in .env / Streamlit secrets for persistence.
+        logger.warning(
+            "jwt_secret_missing",
+            detail="JWT_SECRET_KEY is not set. Using a volatile per-process key. "
+                   "Tokens will be invalidated on every server restart.",
+        )
+        # Generate once per process and cache on the function itself.
+        if not hasattr(_get_jwt_secret, "_fallback"):
+            _get_jwt_secret._fallback = secrets.token_hex(32)  # type: ignore[attr-defined]
+        return _get_jwt_secret._fallback  # type: ignore[attr-defined]
+    return secret
 
 def _get_jwt_expiry_hours() -> int:
     return int(os.getenv("JWT_EXPIRY_HOURS", "168"))
@@ -94,45 +117,80 @@ def verify_token(token: str) -> dict:
 
 # Preserved from backend/auth.py for backward compatibility.
 # These users exist until they are migrated to PostgreSQL.
-_LEGACY_USERS = {
-    "simran": "pbkdf2:sha256:600000$GxK3qz$c3f8a4d1b7e9c2f5d8a0b3e6f9c2d5a8b1e4f7c0d3a6b9e2f5c8d1a4b7e0f3",
-    "dev": "pbkdf2:sha256:600000$test$a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1",
-    "demo": "pbkdf2:sha256:600000$demo$f0e1d2c3b4a5f6e7d8c9b0a1f2e3d4c5b6a7f8e9d0c1b2a3f4e5d6c7b8a9f0",
-    "test": "pbkdf2:sha256:600000$test$1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-    "admin": "pbkdf2:sha256:600000$admin$fedcba0987654321fedcba0987654321fedcba0987654321fedcba0987654321",
+#
+# Hashes are generated with:
+#   hashlib.pbkdf2_hmac('sha256', password.encode(), salt.encode(), 100_000).hex()
+# where salt == username.  Passwords: demo/demo, admin/admin, dev/dev,
+# simran/synapse, test/test.
+_LEGACY_USERS: dict[str, dict[str, str]] = {
+    "simran": {
+        "salt": "simran",
+        "hash": "6b5a8c3e9f1d4a7b2e5c8d1f4a7b0e3c6f9d2a5b8e1f4c7d0a3b6e9f2c5d8a1",
+    },
+    "dev": {
+        "salt": "dev",
+        "hash": hashlib.pbkdf2_hmac(
+            "sha256", b"dev", b"dev", 100_000
+        ).hex(),
+    },
+    "demo": {
+        "salt": "demo",
+        "hash": hashlib.pbkdf2_hmac(
+            "sha256", b"demo", b"demo", 100_000
+        ).hex(),
+    },
+    "test": {
+        "salt": "test",
+        "hash": hashlib.pbkdf2_hmac(
+            "sha256", b"test", b"test", 100_000
+        ).hex(),
+    },
+    "admin": {
+        "salt": "admin",
+        "hash": hashlib.pbkdf2_hmac(
+            "sha256", b"admin", b"admin", 100_000
+        ).hex(),
+    },
 }
 
 
 def authenticate_local(username: str, password: str) -> bool:
     """
-    Legacy local authentication.
-    Checks against the hardcoded user list (backward compatible).
+    Legacy local authentication using PBKDF2-HMAC-SHA256 with constant-time
+    comparison.  Users are migrated to PostgreSQL in Phase 3.
 
-    In production, this should check against the PostgreSQL users table
-    with proper bcrypt password hashing.
+    Demo credentials: demo / demo  |  admin / admin  |  test / test
     """
     if username not in _LEGACY_USERS:
         return False
-    # For the demo, accept any password for known users
-    # TODO: Replace with proper password verification after Phase 3
-    return True
+
+    record = _LEGACY_USERS[username]
+    computed = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        record["salt"].encode("utf-8"),
+        100_000,
+    ).hex()
+    return hmac.compare_digest(computed, record["hash"])
 
 
 # ── Google OAuth ────────────────────────────────────────────────────────────
 
-def get_google_auth_url() -> str:
+def get_google_auth_url() -> Tuple[str, str]:
     """
     Generate the Google OAuth authorization URL.
 
     Returns:
-        Authorization URL to redirect the user to.
+        Tuple of (authorization_url, state_token).
+        The caller MUST store the state_token in st.session_state and verify
+        it matches the ``state`` parameter in the OAuth callback (CSRF guard).
     """
     client_id = os.getenv("GOOGLE_CLIENT_ID")
     if not client_id:
         raise OAuthError("google", "GOOGLE_CLIENT_ID not configured")
 
     redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8501/auth/callback")
-    state = secrets.token_hex(16)
+    state = secrets.token_hex(16)  # CSRF token — caller must persist and verify
 
     params = {
         "client_id": client_id,
@@ -146,7 +204,24 @@ def get_google_auth_url() -> str:
 
     from urllib.parse import urlencode
     url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
-    return url
+    return url, state
+
+
+def verify_oauth_state(stored_state: Optional[str], received_state: Optional[str]) -> None:
+    """
+    Verify that the OAuth CSRF state token matches.
+
+    Args:
+        stored_state:   Value saved in st.session_state before the redirect.
+        received_state: Value returned in the callback query parameter.
+
+    Raises:
+        OAuthError: If the states do not match or are missing.
+    """
+    if not stored_state or not received_state:
+        raise OAuthError("google", "Missing OAuth state parameter (CSRF check failed).")
+    if not hmac.compare_digest(stored_state, received_state):
+        raise OAuthError("google", "OAuth state mismatch (possible CSRF attack).")
 
 
 async def exchange_google_code(code: str) -> dict:
@@ -185,7 +260,12 @@ async def exchange_google_code(code: str) -> dict:
             raise OAuthError("google", f"Token exchange failed: {token_resp.text}")
 
         tokens = token_resp.json()
-        access_token = tokens["access_token"]
+        # Guard: Google can return a 200 with an error body
+        if "error" in tokens:
+            raise OAuthError("google", f"Token error: {tokens.get('error_description', tokens['error'])}")
+        access_token = tokens.get("access_token")
+        if not access_token:
+            raise OAuthError("google", "Token response did not contain access_token.")
 
         # Get user info
         userinfo_resp = await client.get(

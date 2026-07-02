@@ -1,6 +1,6 @@
 
-
 services:
+  # ── PostgreSQL (primary data store) ─────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: synapse-postgres
@@ -18,7 +18,109 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - synapse-net
+
+  # ── Redis (Celery broker + response cache) ───────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: synapse-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - synapse-net
+
+  # ── FastAPI Backend ──────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: synapse-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://synapse:synapse@postgres:5432/synapse_db
+      - DATABASE_URL_SYNC=postgresql://synapse:synapse@postgres:5432/synapse_db
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-me-to-a-random-64-char-string-for-production}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
+      - OLLAMA_ENABLED=${OLLAMA_ENABLED:-false}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - ELEVENLABS_ENABLED=${ELEVENLABS_ENABLED:-false}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
+      - APP_ENV=production
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./synapse_ai_tutor/data:/app/synapse_ai_tutor/data
+      - synapse_audio_cache:/app/audio_cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - synapse-net
+
+  # ── Celery Worker (background tasks: TTS, notes, embedding) ─────────────────
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: synapse-worker
+    restart: unless-stopped
+    command: celery -A workers.celery_app worker --loglevel=info --concurrency=2
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://synapse:synapse@postgres:5432/synapse_db
+      - REDIS_URL=redis://redis:6379/0
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - ELEVENLABS_ENABLED=${ELEVENLABS_ENABLED:-false}
+      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
+    volumes:
+      - ./synapse_ai_tutor/data:/app/synapse_ai_tutor/data
+      - synapse_audio_cache:/app/audio_cache
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - synapse-net
+
+  # ── Nginx Reverse Proxy (production only) ────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: synapse-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
+    depends_on:
+      - backend
+    networks:
+      - synapse-net
+    profiles:
+      - production
 
 volumes:
   synapse_pgdata:
     driver: local
+  synapse_audio_cache:
+    driver: local
+
+networks:
+  synapse-net:
+    driver: bridge

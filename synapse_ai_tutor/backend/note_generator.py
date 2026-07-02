@@ -3,16 +3,15 @@ AI Knowledge Note Generator for Synapse AI Tutor.
 Generates structured markdown notes for each concept using LLM + RAG.
 Falls back to curated template content when LLM is offline.
 Notes are stored as downloadable markdown files.
+
+Storage is now delegated to storage.json_store.JSONNoteRepository and
+JSONProgressRepository — no direct file I/O from this module.
 """
 
 import os
-import json
-from datetime import datetime
 from backend.llm_client import generate_response
+from core.exceptions import LLMError
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
-NOTES_DIR = os.path.join(DATA_DIR, "notes")
-PROGRESS_FILE = os.path.join(DATA_DIR, "progress.json")
 
 
 # ── Note Generation ───────────────────────────────────────────────────────────
@@ -78,15 +77,19 @@ A concise 2-3 sentence summary wrapping up the key takeaways.
 Make the content thorough, accurate, and adapted to {level} level.
 Use clear formatting with markdown."""
 
-    response = generate_response(
-        prompt=f"Create a knowledge note about: {topic}",
-        system_prompt=system_prompt,
-        temperature=0.6,
-        max_tokens=2500
-    )
+    try:
+        response = generate_response(
+            prompt=f"Create a knowledge note about: {topic}",
+            system_prompt=system_prompt,
+            temperature=0.6,
+            max_tokens=2500,
+        )
+    except LLMError:
+        # LLM is offline or rate-limited — use curated fallback template.
+        return get_note_template(topic, level)
 
-    # Check if LLM failed — use fallback template
-    if response.startswith("__LLM_"):
+    # Legacy guard: some callers may still return a sentinel string.
+    if isinstance(response, str) and response.startswith("__LLM_"):
         return get_note_template(topic, level)
 
     # Validate response has expected structure
@@ -330,171 +333,77 @@ Understanding {topic} requires hands-on practice with real implementations. Star
 {topic} is an important concept in the AI/ML landscape. Building a strong understanding requires both theoretical study and practical implementation. Use the connected concepts above to build a comprehensive mental model."""
 
 
-# ── Note Persistence (Markdown Files) ─────────────────────────────────────────
+# ── Note Persistence (delegated to storage layer) ───────────────────────────────────────
+#
+# All note read/write operations are delegated to JSONNoteRepository
+# (storage/json_store.py) which uses atomic writes and a threading.Lock.
+# The old direct-file helpers (_load_progress, _save_progress, save_note, etc.)
+# have been removed to eliminate the race-condition they caused.
+#
+# Import and use the repository directly:
+#
+#   from storage.json_store import JSONNoteRepository
+#   repo = JSONNoteRepository()
+#   repo.save_note(username, topic, content)
+#   content = repo.load_note(username, topic)
+#   notes   = repo.list_notes(username)
+#   exists  = repo.note_exists(username, topic)
+#   repo.delete_note(username, topic)
+
 
 def save_note(username: str, topic: str, note_content: str) -> str:
-    """
-    Save a generated note as a markdown file.
-
-    Args:
-        username: Student username
-        topic: Topic name
-        note_content: Markdown content
-
-    Returns:
-        Absolute path to the saved file
-    """
-    user_dir = os.path.join(NOTES_DIR, _sanitize_filename(username))
-    os.makedirs(user_dir, exist_ok=True)
-
-    filename = f"{_sanitize_filename(topic)}.md"
-    filepath = os.path.join(user_dir, filename)
-
-    with open(filepath, 'w', encoding='utf-8') as f:
-        f.write(note_content)
-
-    # Also update progress.json with metadata
-    _update_note_metadata(username, topic, filepath)
-
-    return filepath
+    """Save a generated note. Delegates to JSONNoteRepository."""
+    from storage.json_store import JSONNoteRepository
+    return JSONNoteRepository().save_note(username, topic, note_content)
 
 
 def load_note(username: str, topic: str) -> str:
-    """
-    Load a saved note from markdown file.
-
-    Returns:
-        Markdown content string, or empty string if not found
-    """
-    user_dir = os.path.join(NOTES_DIR, _sanitize_filename(username))
-    filename = f"{_sanitize_filename(topic)}.md"
-    filepath = os.path.join(user_dir, filename)
-
-    if os.path.exists(filepath):
-        with open(filepath, 'r', encoding='utf-8') as f:
-            return f.read()
-    return ""
-
-
-def get_note_filepath(username: str, topic: str) -> str:
-    """Get the file path for a note (may not exist yet)."""
-    user_dir = os.path.join(NOTES_DIR, _sanitize_filename(username))
-    filename = f"{_sanitize_filename(topic)}.md"
-    return os.path.join(user_dir, filename)
+    """Load a saved note. Returns empty string if not found."""
+    from storage.json_store import JSONNoteRepository
+    return JSONNoteRepository().load_note(username, topic) or ""
 
 
 def get_all_notes(username: str) -> list:
-    """
-    Get all saved notes for a user.
-
-    Returns:
-        List of dicts: [{"topic": str, "filepath": str, "created_at": str, "content": str}]
-    """
-    user_dir = os.path.join(NOTES_DIR, _sanitize_filename(username))
-    notes = []
-
-    if not os.path.isdir(user_dir):
-        return notes
-
-    for filename in os.listdir(user_dir):
-        if filename.endswith('.md'):
-            filepath = os.path.join(user_dir, filename)
-            topic = filename.replace('.md', '').replace('_', ' ').title()
-
-            # Try to get proper topic name from metadata
-            metadata = _get_note_metadata(username)
-            for t, meta in metadata.items():
-                if _sanitize_filename(t) == filename.replace('.md', ''):
-                    topic = t
-                    break
-
-            with open(filepath, 'r', encoding='utf-8') as f:
-                content = f.read()
-
-            created_at = datetime.fromtimestamp(os.path.getmtime(filepath)).isoformat()
-
-            notes.append({
-                "topic": topic,
-                "filepath": filepath,
-                "created_at": created_at,
-                "content": content,
-                "summary": _extract_summary(content)
-            })
-
-    return sorted(notes, key=lambda x: x["created_at"], reverse=True)
+    """Get all saved notes for a user."""
+    from storage.json_store import JSONNoteRepository
+    return JSONNoteRepository().list_notes(username)
 
 
 def note_exists(username: str, topic: str) -> bool:
     """Check if a note already exists for this user/topic."""
-    filepath = get_note_filepath(username, topic)
-    return os.path.exists(filepath)
+    from storage.json_store import JSONNoteRepository
+    return JSONNoteRepository().note_exists(username, topic)
 
 
 def delete_note(username: str, topic: str) -> bool:
     """Delete a note file."""
-    filepath = get_note_filepath(username, topic)
-    if os.path.exists(filepath):
-        os.remove(filepath)
-        return True
-    return False
+    from storage.json_store import JSONNoteRepository
+    return JSONNoteRepository().delete_note(username, topic)
 
 
-# ── Internal Helpers ──────────────────────────────────────────────────────────
+def get_note_filepath(username: str, topic: str) -> str:
+    """Get the expected file path for a note (may not exist yet)."""
+    from storage.json_store import JSONNoteRepository
+    repo = JSONNoteRepository()
+    return repo._filepath(username, topic)
+
+
+# ── Internal Helpers ───────────────────────────────────────────────────────────────
 
 def _sanitize_filename(name: str) -> str:
     """Convert a topic/username to a safe filename."""
-    return name.lower().replace(' ', '_').replace('/', '_').replace('&', 'and').replace('(', '').replace(')', '')
+    from storage.json_store import JSONNoteRepository
+    return JSONNoteRepository()._sanitize(name)
 
 
 def _extract_summary(content: str) -> str:
-    """Extract the summary section from a note, or first ~100 chars."""
+    """Extract the summary section from a note, or first ~200 chars."""
     if "## Summary" in content:
         parts = content.split("## Summary")
         if len(parts) > 1:
-            summary = parts[1].strip()
-            # Take first paragraph
-            lines = [l.strip() for l in summary.split('\n') if l.strip()]
+            lines = [l.strip() for l in parts[1].split("\n") if l.strip()]
             if lines:
                 return lines[0][:200]
     # Fallback: first meaningful line after title
-    lines = [l.strip() for l in content.split('\n') if l.strip() and not l.startswith('#')]
+    lines = [l.strip() for l in content.split("\n") if l.strip() and not l.startswith("#")]
     return lines[0][:200] if lines else "No summary available."
-
-
-def _update_note_metadata(username: str, topic: str, filepath: str):
-    """Update note metadata in progress.json."""
-    data = _load_progress()
-    if username not in data:
-        data[username] = {}
-
-    if "_notes_metadata" not in data[username]:
-        data[username]["_notes_metadata"] = {}
-
-    data[username]["_notes_metadata"][topic] = {
-        "filepath": filepath,
-        "created_at": datetime.now().isoformat(),
-        "updated_at": datetime.now().isoformat()
-    }
-    _save_progress(data)
-
-
-def _get_note_metadata(username: str) -> dict:
-    """Get note metadata from progress.json."""
-    data = _load_progress()
-    return data.get(username, {}).get("_notes_metadata", {})
-
-
-def _load_progress() -> dict:
-    if os.path.exists(PROGRESS_FILE):
-        try:
-            with open(PROGRESS_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except (json.JSONDecodeError, IOError):
-            return {}
-    return {}
-
-
-def _save_progress(data: dict):
-    os.makedirs(os.path.dirname(PROGRESS_FILE), exist_ok=True)
-    with open(PROGRESS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)

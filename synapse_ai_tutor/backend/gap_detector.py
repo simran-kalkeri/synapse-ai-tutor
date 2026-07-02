@@ -240,7 +240,7 @@ def detect_knowledge_gaps(topic: str, mastery_scores: dict) -> dict:
     gaps = []
     strengths = []
     weak_related = []
-    
+
     # Check related topics mastery
     for rel_topic in related:
         if rel_topic in mastery_scores:
@@ -254,9 +254,8 @@ def detect_knowledge_gaps(topic: str, mastery_scores: dict) -> dict:
                         gaps.append(prereq)
             elif score >= 75:
                 strengths.append(rel_topic)
-        else:
-            # Not assessed yet — potential gap
-            weak_related.append(rel_topic)
+        # else: not yet assessed — do NOT treat as a gap (H-3 fix).
+        # A student who hasn't studied a topic yet is not demonstrating a gap.
     
     # If the student hasn't taken the current topic's assessment
     # or scored low, flag prerequisite concepts as gaps
