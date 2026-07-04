@@ -11,14 +11,7 @@ import requests
 # ── Configuration ────────────────────────────────────────────────────────────
 # Groq (primary)
 def _get_groq_key() -> str:
-    """Get Groq API key from Streamlit secrets → env var → None."""
-    try:
-        import streamlit as st
-        key = st.secrets.get("groq", {}).get("GROQ_API_KEY")
-        if key:
-            return key
-    except Exception:
-        pass
+    """Get Groq API key from environment variable."""
     return os.getenv("GROQ_API_KEY", "")
 
 
@@ -34,13 +27,7 @@ GENERATE_TIMEOUT = 120
 
 
 def get_ollama_base_url() -> str:
-    """Get the Ollama base URL dynamically."""
-    try:
-        import streamlit as st
-        if "ollama_base_url" in st.session_state and st.session_state.ollama_base_url:
-            return st.session_state.ollama_base_url
-    except Exception:
-        pass
+    """Get the Ollama base URL from environment variable."""
     return os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
 

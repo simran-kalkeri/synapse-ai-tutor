@@ -2,36 +2,15 @@
 Abstract repository interfaces for Synapse AI Tutor.
 These define the contract that all storage backends must implement.
 Phase 1 uses JSON (json_store.py). Phase 2 swaps in PostgreSQL.
+
+Note: The generic BaseRepository (get/set/delete/exists) was removed —
+it was never implemented by any concrete class (dead code).
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from typing import Any, Optional
-
-
-class BaseRepository(ABC):
-    """Abstract base for all data repositories."""
-
-    @abstractmethod
-    def get(self, key: str, default: Any = None) -> Any:
-        """Retrieve a value by key."""
-        ...
-
-    @abstractmethod
-    def set(self, key: str, value: Any) -> None:
-        """Store a value by key."""
-        ...
-
-    @abstractmethod
-    def delete(self, key: str) -> bool:
-        """Delete a value by key. Returns True if existed."""
-        ...
-
-    @abstractmethod
-    def exists(self, key: str) -> bool:
-        """Check if a key exists."""
-        ...
 
 
 class ProgressRepository(ABC):
@@ -48,7 +27,7 @@ class ProgressRepository(ABC):
         ...
 
     @abstractmethod
-    def update_topic_progress(self, username: str, topic: str, data: dict) -> None:
+    def update_topic_progress(self, username: str, topic: str, updates: dict) -> None:
         """Update progress for a specific user+topic."""
         ...
 

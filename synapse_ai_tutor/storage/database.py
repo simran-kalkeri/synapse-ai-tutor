@@ -138,9 +138,40 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 def get_sync_session() -> Session:
-    """Get a sync session (for migration scripts and CLI tools)."""
+    """
+    Get a sync session (for migration scripts and CLI tools).
+
+    .. warning::
+        The caller is responsible for closing this session.
+        Prefer :func:`get_sync_session_ctx` for automatic cleanup.
+    """
     factory = get_sync_session_factory()
     return factory()
+
+
+from contextlib import contextmanager
+
+@contextmanager
+def get_sync_session_ctx():
+    """
+    Context manager that yields a sync session and guarantees cleanup.
+
+    Usage::
+
+        with get_sync_session_ctx() as session:
+            session.add(obj)
+            session.commit()
+    """
+    session = get_sync_session()
+    try:
+        yield session
+        session.commit()
+    except Exception:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+
 
 
 async def init_db() -> None:

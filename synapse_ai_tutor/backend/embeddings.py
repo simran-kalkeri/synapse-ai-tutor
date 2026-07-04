@@ -6,9 +6,12 @@ and builds a FAISS index for efficient similarity search.
 
 import os
 import numpy as np
-import pickle
 import faiss
 from sentence_transformers import SentenceTransformer
+
+from config.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 try:
     import streamlit as st
@@ -25,9 +28,9 @@ if _STREAMLIT_AVAILABLE:
     @st.cache_resource(show_spinner=False)
     def _load_model_cached() -> SentenceTransformer:
         """Load embedding model once and pin it in Streamlit's resource cache."""
-        print("[LOAD] Loading embedding model: all-MiniLM-L6-v2...")
+        logger.info("embedding_model_loading", model="all-MiniLM-L6-v2")
         model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-        print("[OK] Embedding model loaded and cached")
+        logger.info("embedding_model_ready")
         return model
 
 
@@ -43,14 +46,13 @@ def get_embedding_model() -> SentenceTransformer:
     """
     global _model
     if _STREAMLIT_AVAILABLE:
-        # st.cache_resource ensures the model is only loaded once per server
         return _load_model_cached()
     else:
         # Fallback for scripts/tests run outside Streamlit
         if _model is None:
-            print("[LOAD] Loading embedding model: all-MiniLM-L6-v2...")
+            logger.info("embedding_model_loading", model="all-MiniLM-L6-v2")
             _model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-            print("[OK] Embedding model loaded")
+            logger.info("embedding_model_ready")
         return _model
 
 
@@ -66,12 +68,12 @@ def generate_embeddings(chunks: list) -> np.ndarray:
     """
     model = get_embedding_model()
     texts = [chunk["text"] for chunk in chunks]
-    
-    print(f"[PROC] Generating embeddings for {len(texts)} chunks...")
-    embeddings = model.encode(texts, show_progress_bar=True, batch_size=64)
+
+    logger.info("embeddings_generating", count=len(texts))
+    embeddings = model.encode(texts, show_progress_bar=False, batch_size=64)
     embeddings = np.array(embeddings, dtype='float32')
-    
-    print(f"[OK] Generated embeddings with shape: {embeddings.shape}")
+
+    logger.info("embeddings_generated", shape=str(embeddings.shape))
     return embeddings
 
 
@@ -88,12 +90,12 @@ def build_faiss_index(embeddings: np.ndarray) -> faiss.IndexFlatIP:
     """
     # Normalize embeddings for cosine similarity
     faiss.normalize_L2(embeddings)
-    
+
     dimension = embeddings.shape[1]
     index = faiss.IndexFlatIP(dimension)
     index.add(embeddings)
-    
-    print(f"[OK] Built FAISS index with {index.ntotal} vectors (dim={dimension})")
+
+    logger.info("faiss_index_built", vectors=index.ntotal, dimension=dimension)
     return index
 
 
@@ -103,7 +105,7 @@ def save_faiss_index(index: faiss.IndexFlatIP, filepath: str = None):
         filepath = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "faiss_index.bin")
     
     faiss.write_index(index, filepath)
-    print(f"[SAVE] FAISS index saved to {filepath}")
+    logger.info("faiss_index_saved", filepath=filepath)
 
 
 def load_faiss_index(filepath: str = None):
@@ -120,7 +122,7 @@ def load_faiss_index(filepath: str = None):
         return None
     
     index = faiss.read_index(filepath)
-    print(f"[LOAD] Loaded FAISS index with {index.ntotal} vectors")
+    logger.info("faiss_index_loaded", vectors=index.ntotal)
     return index
 
 

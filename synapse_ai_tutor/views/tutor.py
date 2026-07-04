@@ -25,7 +25,7 @@ from backend.voice_components import (
     render_tts_settings,
 )
 
-# Student Digital Twin ΓÇö defensive import (app never breaks if module fails)
+# Student Digital Twin — only catch missing module, not all exceptions (M-8 fix)
 try:
     from backend.student_memory import (
         add_message        as _mem_add_message,
@@ -33,7 +33,7 @@ try:
         generate_student_summary,
     )
     _MEMORY_AVAILABLE = True
-except Exception:
+except (ImportError, ModuleNotFoundError):
     _MEMORY_AVAILABLE = False
     def _mem_add_message(*a, **kw):        pass
     def get_recent_messages(*a, **kw):    return []
@@ -108,10 +108,18 @@ def render_tutor():
 
     # ── Info bar ───────────────────────────────────────────────────────────
     lc = LEVEL_COLORS.get(level, "var(--text-secondary)")
-    try:
-        connected = check_connection()
-    except Exception:
-        connected = False
+
+    # Cache LLM connectivity check with a 30-second TTL to avoid burning
+    # API quota or adding latency on every Streamlit rerun (H-7 fix).
+    import time as _time
+    _now = _time.monotonic()
+    if _now - st.session_state.get("_llm_check_ts", 0) > 30:
+        try:
+            st.session_state._llm_connected = check_connection()
+        except Exception:
+            st.session_state._llm_connected = False
+        st.session_state._llm_check_ts = _now
+    connected = st.session_state.get("_llm_connected", False)
     llm_color = "var(--success)" if connected else "var(--danger)"
     llm_label = "Online" if connected else "Offline (Fallback)"
 

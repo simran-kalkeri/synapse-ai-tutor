@@ -38,12 +38,76 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Paths ΓÇö audio_cache lives OUTSIDE synapse_ai_tutor/
+# Paths - audio_cache lives OUTSIDE synapse_ai_tutor/
 # ---------------------------------------------------------------------------
-# backend/tts.py  ΓåÆ  .parent = backend/  ΓåÆ  .parent = synapse_ai_tutor/  ΓåÆ  .parent = repo_root/
+# backend/tts.py -> .parent = backend/ -> .parent = synapse_ai_tutor/ -> .parent = repo_root/
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 AUDIO_CACHE_DIR = _REPO_ROOT / "audio_cache"
 AUDIO_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+# Cache eviction settings (M-4 fix: prevents unbounded disk growth)
+_CACHE_MAX_AGE_DAYS: int = 7    # delete files older than N days
+_CACHE_MAX_ENTRIES: int  = 500  # keep at most N files (LRU eviction)
+
+
+def evict_audio_cache(
+    max_age_days: int = _CACHE_MAX_AGE_DAYS,
+    max_entries:  int = _CACHE_MAX_ENTRIES,
+) -> int:
+    """
+    Evict old or excess entries from the audio cache.
+
+    Deletion priority:
+    1. Files older than *max_age_days* are always removed.
+    2. If the remaining count still exceeds *max_entries*, the oldest
+       files by mtime are removed until the count is within limit.
+
+    Returns:
+        Number of files deleted.
+    """
+    import time as _time
+
+    deleted = 0
+    now = _time.time()
+    cutoff = now - (max_age_days * 86_400)
+
+    mp3_files = sorted(
+        [p for p in AUDIO_CACHE_DIR.glob("*.mp3")],
+        key=lambda p: p.stat().st_mtime,
+    )
+
+    # Step 1: Remove files older than max_age_days
+    survivors = []
+    for p in mp3_files:
+        if p.stat().st_mtime < cutoff:
+            try:
+                p.unlink()
+                deleted += 1
+            except OSError:
+                pass
+        else:
+            survivors.append(p)
+
+    # Step 2: Evict oldest files if still over max_entries
+    while len(survivors) > max_entries:
+        p = survivors.pop(0)
+        try:
+            p.unlink()
+            deleted += 1
+        except OSError:
+            pass
+
+    if deleted:
+        logger.info("[TTS] Audio cache evicted", deleted=deleted, remaining=len(survivors))
+    return deleted
+
+
+# Run a lightweight eviction pass at module load time (startup cost is minimal).
+try:
+    evict_audio_cache()
+except Exception as _evict_err:
+    logger.warning(f"[TTS] Cache eviction failed at startup: {_evict_err}")
+
 
 # ---------------------------------------------------------------------------
 # Provider configuration ΓÇö driven by voice_config (single source of truth)
@@ -281,23 +345,23 @@ def text_to_speech(
     if not clean_text:
         return None
 
-    # Honour per-call override: if the caller explicitly requests ElevenLabs,
-    # temporarily enable it for this call without mutating the global flag.
-    global USE_ELEVENLABS
-    _saved_flag = USE_ELEVENLABS
-    if use_elevenlabs:
-        USE_ELEVENLABS = True
+    # Determine the effective ElevenLabs flag for this call without mutating globals.
+    # Per-call override: callers that pass use_elevenlabs=True still work (backward compat).
+    effective_elevenlabs = USE_ELEVENLABS or use_elevenlabs
 
-    try:
-        return _synthesize(clean_text, lang, voice_id)
-    finally:
-        USE_ELEVENLABS = _saved_flag   # always restore
+    return _synthesize(clean_text, lang, voice_id, effective_elevenlabs)
 
 
-def _synthesize(clean_text: str, lang: str, voice_id: str) -> Optional[str]:
-    """Internal synthesis entry point (after markdown stripping)."""
+def _synthesize(clean_text: str, lang: str, voice_id: str,
+                use_elevenlabs: bool = False) -> Optional[str]:
+    """Internal synthesis entry point (after markdown stripping).
 
-    # ΓöÇΓöÇ Cache look-up ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    Args:
+        clean_text:     Text to synthesize (markdown already stripped).
+        lang:           BCP-47 language tag for gTTS.
+        voice_id:       ElevenLabs voice ID.
+        use_elevenlabs: Effective flag for this call (no global mutation).
+    """
     cache_key   = hashlib.md5(f"{clean_text}:{voice_id}:{lang}".encode()).hexdigest()
     cached_path = AUDIO_CACHE_DIR / f"{cache_key}.mp3"
 
@@ -305,14 +369,13 @@ def _synthesize(clean_text: str, lang: str, voice_id: str) -> Optional[str]:
         logger.info(f"[TTS] Audio cache hit -> {cached_path.name}")
         return str(cached_path)
 
-    # ΓöÇΓöÇ Hackathon / gTTS-only mode: skip chunking entirely ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
-    # gTTS handles its own internal text splitting ΓÇö no API char limit.
+    # gTTS-only mode: skip chunking (gTTS handles long text internally).
     # This avoids pydub MP3 concatenation which requires a system ffmpeg binary.
-    if not USE_ELEVENLABS:
+    if not use_elevenlabs:
         success = _gtts_synthesize(clean_text, lang, cached_path)
         return str(cached_path) if success and cached_path.exists() else None
 
-    # ΓöÇΓöÇ ElevenLabs enabled: chunk to stay within API size limits ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
+    # ElevenLabs enabled: chunk to stay within API size limits
     chunks = _split_into_chunks(clean_text)
 
     if len(chunks) == 1:

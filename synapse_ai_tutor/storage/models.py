@@ -139,9 +139,6 @@ class LearningSession(Base):
 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
-    __table_args__ = (
-        Index("idx_chat_user_topic", "user_id", "topic", "created_at"),
-    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=_uuid)
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
@@ -152,6 +149,7 @@ class ChatMessage(Base):
 
     user = relationship("User", back_populates="chat_messages")
 
+    # Single __table_args__ — duplicate definition caused DB init to crash.
     __table_args__ = (
         CheckConstraint("role IN ('user', 'assistant')", name="ck_chat_role"),
         Index("idx_chat_user_topic", "user_id", "topic", "created_at"),

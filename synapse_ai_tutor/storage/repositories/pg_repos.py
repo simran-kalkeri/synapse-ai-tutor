@@ -102,10 +102,16 @@ class PGUserRepository:
 
         # New user
         username = email.split("@")[0]
-        # Ensure username uniqueness
+        # Ensure username uniqueness (max 100 iterations to avoid infinite loops)
         base_username = username
         counter = 1
+        _MAX_TRIES = 100
         while await self.get_by_username(username):
+            if counter >= _MAX_TRIES:
+                # Fallback: append a random suffix to guarantee uniqueness
+                import secrets as _sec
+                username = f"{base_username}_{_sec.token_hex(4)}"
+                break
             username = f"{base_username}{counter}"
             counter += 1
 
