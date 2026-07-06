@@ -169,6 +169,94 @@ export const TOPICS = [
 
 export type Topic = typeof TOPICS[number]
 
+// ── Visual Engine ─────────────────────────────────────────────────────────────
+export interface VisualFrame {
+  index: number
+  caption: string
+  image_b64: string
+}
+
+export interface VisualizeResponse {
+  topic: string
+  canonical_type: string
+  frames: VisualFrame[]
+  total_frames: number
+}
+
+export interface VisualizeTopicsResponse {
+  canonical_types: string[]
+  aliases: Record<string, string[]>
+  note: string
+}
+
+// ── Voice (TTS/STT) ───────────────────────────────────────────────────────────
+export interface TTSResponse {
+  audio_url: string | null
+  status: string
+}
+
+export interface STTResponse {
+  transcript: string
+}
+
+export interface VoiceStatus {
+  tts_available: boolean
+  stt_available: boolean
+  tts_provider: string
+  stt_provider: string
+  elevenlabs_available: boolean
+}
+
+// ── Analytics ─────────────────────────────────────────────────────────────────
+
+export interface MasteryTrendPoint {
+  date: string
+  topic: string
+  mastery: number
+}
+
+export interface StudySessionInfo {
+  id: string
+  topic: string
+  duration_minutes: number
+  questions_answered: number
+  concepts_reviewed: number
+  timestamp: string
+}
+
+export interface Recommendation {
+  type: 'review' | 'practice' | 'explore' | 'assess'
+  topic: string
+  reason: string
+  priority: number
+  action_label: string
+  action_path: string
+}
+
+export interface AnalyticsData {
+  mastery_trend: MasteryTrendPoint[]
+  study_sessions: StudySessionInfo[]
+  recommendations: Recommendation[]
+  weekly_activity: Record<string, number>
+  study_consistency: number
+}
+
+// ── Study Goals ───────────────────────────────────────────────────────────────
+
+export interface StudyGoal {
+  id: string
+  title: string
+  description: string
+  topic: string
+  target_sessions: number
+  target_mastery: number
+  current_sessions: number
+  current_mastery: number
+  status: 'active' | 'completed' | 'archived'
+  created_at: string
+  updated_at: string
+}
+
 export const DIFFICULTY_COLORS = {
   easy: '#10b981',
   intermediate: '#f59e0b',

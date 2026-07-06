@@ -1,43 +1,7 @@
-
 services:
-  # ── PostgreSQL (primary data store) ─────────────────────────────────────────
-  postgres:
-    image: postgres:16-alpine
-    container_name: synapse-postgres
-    restart: unless-stopped
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_USER: synapse
-      POSTGRES_PASSWORD: synapse
-      POSTGRES_DB: synapse_db
-    volumes:
-      - synapse_pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U synapse -d synapse_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - synapse-net
-
-  # ── Redis (Celery broker + response cache) ───────────────────────────────────
-  redis:
-    image: redis:7-alpine
-    container_name: synapse-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - synapse-net
-
   # ── FastAPI Backend ──────────────────────────────────────────────────────────
+  # Runs standalone with JSON file storage.
+  # For PostgreSQL + Redis, use: docker-compose -f docker-compose.yml -f docker-compose.pg.yml up
   backend:
     build:
       context: .
@@ -47,12 +11,10 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://synapse:synapse@postgres:5432/synapse_db
-      - DATABASE_URL_SYNC=postgresql://synapse:synapse@postgres:5432/synapse_db
-      - REDIS_URL=redis://redis:6379/0
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-change-me-to-a-random-64-char-string-for-production}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
       - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY:-}
       - OLLAMA_ENABLED=${OLLAMA_ENABLED:-false}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - ELEVENLABS_ENABLED=${ELEVENLABS_ENABLED:-false}
@@ -60,45 +22,16 @@ services:
       - APP_ENV=production
       - LOG_LEVEL=INFO
     volumes:
+      # Persist all JSON data files (progress, memory, notes, etc.)
       - ./synapse_ai_tutor/data:/app/synapse_ai_tutor/data
       - synapse_audio_cache:/app/audio_cache
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-    networks:
-      - synapse-net
 
-  # ── Celery Worker (background tasks: TTS, notes, embedding) ─────────────────
-  worker:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-    container_name: synapse-worker
-    restart: unless-stopped
-    command: celery -A workers.celery_app worker --loglevel=info --concurrency=2
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://synapse:synapse@postgres:5432/synapse_db
-      - REDIS_URL=redis://redis:6379/0
-      - GROQ_API_KEY=${GROQ_API_KEY:-}
-      - ELEVENLABS_ENABLED=${ELEVENLABS_ENABLED:-false}
-      - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY:-}
-    volumes:
-      - ./synapse_ai_tutor/data:/app/synapse_ai_tutor/data
-      - synapse_audio_cache:/app/audio_cache
-    depends_on:
-      - redis
-      - postgres
-    networks:
-      - synapse-net
-
-  # ── Nginx Reverse Proxy (production only) ────────────────────────────────────
+  # ── Nginx Reverse Proxy (production only — enable with --profile production) ─
   nginx:
     image: nginx:alpine
     container_name: synapse-nginx
@@ -110,17 +43,9 @@ services:
       - ./frontend/dist:/usr/share/nginx/html:ro
     depends_on:
       - backend
-    networks:
-      - synapse-net
     profiles:
       - production
 
 volumes:
-  synapse_pgdata:
-    driver: local
   synapse_audio_cache:
     driver: local
-
-networks:
-  synapse-net:
-    driver: bridge

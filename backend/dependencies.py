@@ -14,8 +14,19 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from jose import JWTError, jwt
 
-# JWT config
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "change-me-to-a-random-64-char-string")
+# JWT config — single source of truth via pydantic-settings
+# Settings reads from env var → .env file → default (in that priority order)
+try:
+    import sys as _sys
+    import pathlib as _pl
+    _synapse = str(_pl.Path(__file__).resolve().parent.parent / "synapse_ai_tutor")
+    if _synapse not in _sys.path:
+        _sys.path.insert(0, _synapse)
+    from config.settings import get_settings as _get_settings
+    _s = _get_settings()
+    JWT_SECRET_KEY: str = _s.JWT_SECRET_KEY
+except Exception as e:
+    raise RuntimeError("JWT_SECRET_KEY not set in environment") from e
 JWT_ALGORITHM = "HS256"
 
 security = HTTPBearer(auto_error=False)

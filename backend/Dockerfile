@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 # System dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -7,14 +7,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install Python dependencies
+# Install Python dependencies (backend infra)
 COPY backend/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy AI modules first (needed for second requirements file)
+COPY synapse_ai_tutor/ /app/synapse_ai_tutor/
+
+# Install AI module dependencies (groq, sentence-transformers, faiss-cpu, etc.)
+COPY synapse_ai_tutor/requirements.txt /app/synapse_ai_tutor/requirements.txt
+RUN pip install --no-cache-dir -r /app/synapse_ai_tutor/requirements.txt
+
 # Copy backend source
 COPY backend/ /app/
-# Copy AI modules
-COPY synapse_ai_tutor/ /app/synapse_ai_tutor/
 
 ENV PYTHONPATH=/app:/app/synapse_ai_tutor
 ENV PYTHONUNBUFFERED=1

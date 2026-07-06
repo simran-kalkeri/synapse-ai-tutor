@@ -1,7 +1,7 @@
 """
 LLM Client for Synapse AI Tutor.
-Primary: Groq API (cloud, fast inference)
-Fallback: Ollama (local, optional)
+Primary: Ollama (remote server at http://10.1.17.65:11434)
+Fallback: Groq API (cloud, fast inference)
 Enhanced with full adaptive prompting and graceful fallback mode.
 """
 
@@ -16,6 +16,14 @@ def _get_groq_key() -> str:
 
 
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+
+# LLM Router — auto-selects model based on query type
+try:
+    from ai.llm.router import get_model_for_query as _route_query  # type: ignore
+    _ROUTER_AVAILABLE = True
+except ImportError:
+    _ROUTER_AVAILABLE = False
+    _route_query = None  # type: ignore
 
 # Ollama (fallback)
 OLLAMA_ENABLED = os.getenv("OLLAMA_ENABLED", "false").lower() in ("true", "1", "yes")
@@ -32,8 +40,18 @@ def get_ollama_base_url() -> str:
 
 
 def check_connection() -> bool:
-    """Check if any LLM provider is reachable. Groq first, then Ollama."""
-    # Try Groq
+    """Check if any LLM provider is reachable. Ollama first, then Groq."""
+    # Try Ollama (primary)
+    if OLLAMA_ENABLED:
+        try:
+            base_url = get_ollama_base_url()
+            response = requests.get(f"{base_url}/api/tags", timeout=CONNECT_TIMEOUT)
+            if response.status_code == 200:
+                return True
+        except Exception:
+            pass
+
+    # Try Groq (fallback)
     groq_key = _get_groq_key()
     if groq_key:
         try:
@@ -44,28 +62,13 @@ def check_connection() -> bool:
         except Exception:
             pass
 
-    # Try Ollama
-    if OLLAMA_ENABLED:
-        try:
-            base_url = get_ollama_base_url()
-            response = requests.get(f"{base_url}/api/tags", timeout=CONNECT_TIMEOUT)
-            return response.status_code == 200
-        except Exception:
-            pass
-
-    # Groq key exists but connectivity check was skipped/failed — still usable
-    return bool(groq_key)
+    return False
 
 
 def get_available_models() -> list:
     """Get list of available models."""
     models = []
-    # Groq models
-    groq_key = _get_groq_key()
-    if groq_key:
-        models.append(GROQ_MODEL)
-
-    # Ollama models
+    # Ollama models (primary)
     if OLLAMA_ENABLED:
         try:
             base_url = get_ollama_base_url()
@@ -75,6 +78,12 @@ def get_available_models() -> list:
                 models.extend([m["name"] for m in data.get("models", [])])
         except Exception:
             pass
+
+    # Groq models (fallback)
+    groq_key = _get_groq_key()
+    if groq_key:
+        models.append(GROQ_MODEL)
+
     return models
 
 
@@ -132,47 +141,172 @@ def _call_ollama(prompt: str, system_prompt: str, temperature: float, max_tokens
         raise ConnectionError(f"Ollama returned status {response.status_code}")
 
 
+def _call_nvidia(prompt: str, system_prompt: str, temperature: float, max_tokens: int) -> str:
+    """
+    Call NVIDIA NIM API.
+    Delegates to ai.llm.client._call_nvidia (openai SDK, settings-aware) when available.
+    Falls back to raw requests implementation for environments without openai package.
+    """
+    # Prefer the canonical implementation from ai.llm.client
+    try:
+        from ai.llm.client import _call_nvidia as _nim  # type: ignore
+        return _nim(prompt, system_prompt, temperature, max_tokens)
+    except ImportError:
+        pass  # openai package or config module missing — use raw requests fallback
+
+    import os
+    nvidia_key = os.getenv("NVIDIA_API_KEY", "")
+    if not nvidia_key:
+        raise ConnectionError("NVIDIA_API_KEY not configured")
+    nvidia_model = os.getenv("NVIDIA_MODEL", "nvidia/nemotron-3-ultra-550b-a55b")
+    nvidia_base  = os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
+
+    headers = {
+        "Authorization": f"Bearer {nvidia_key}",
+        "Content-Type": "application/json",
+    }
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+
+    payload = {
+        "model": nvidia_model,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    resp = requests.post(
+        f"{nvidia_base}/chat/completions",
+        json=payload,
+        headers=headers,
+        timeout=GENERATE_TIMEOUT,
+    )
+    if resp.status_code != 200:
+        raise ConnectionError(f"NVIDIA NIM returned {resp.status_code}: {resp.text[:200]}")
+    return resp.json()["choices"][0]["message"]["content"].strip()
+
+
 def generate_response(
     prompt: str,
     system_prompt: str = None,
     model: str = None,
     temperature: float = 0.7,
-    max_tokens: int = 2048
+    max_tokens: int = 2048,
+    provider: str = None,
 ) -> str:
     """
     Generate a response from the LLM.
-    Provider priority: Groq (primary) → Ollama (fallback)
+    provider='nvidia' → NVIDIA NIM (Nemotron).
+    provider='groq' or None → Ollama (primary) → Groq (fallback).
+
     Returns generated text or an error/fallback magic string.
     """
-    # Try Groq first
+    # NVIDIA explicit route
+    if provider == "nvidia":
+        try:
+            return _call_nvidia(prompt, system_prompt or "", temperature, max_tokens)
+        except Exception as e:
+            # Fall through to Groq if NVIDIA fails
+            pass
+
+    # Auto-select model via router when not explicitly specified
+    resolved_model = model
+    if resolved_model is None and _ROUTER_AVAILABLE and _route_query is not None:
+        try:
+            resolved_model, _query_type = _route_query(prompt)
+        except Exception:
+            resolved_model = None  # fall through to default model
+
+    # Try Ollama first (primary provider)
+    if OLLAMA_ENABLED:
+        try:
+            return _call_ollama(prompt, system_prompt or "", temperature, max_tokens, resolved_model)
+        except requests.exceptions.ConnectionError:
+            pass  # Fall through to Groq
+        except requests.exceptions.Timeout:
+            return "__LLM_TIMEOUT__"
+        except Exception:
+            pass  # Fall through to Groq
+
+    # Try Groq as fallback
     groq_key = _get_groq_key()
     if groq_key:
         try:
-            return _call_groq(prompt, system_prompt or "", temperature, max_tokens, model)
-        except Exception as e:
-            err_str = str(e).lower()
-            if "rate_limit" in err_str or "429" in err_str:
-                pass  # Fall through to Ollama
-            elif "timeout" in err_str:
-                if not OLLAMA_ENABLED:
-                    return "__LLM_TIMEOUT__"
-            # Fall through to Ollama
-
-    # Try Ollama fallback
-    if OLLAMA_ENABLED:
-        try:
-            return _call_ollama(prompt, system_prompt or "", temperature, max_tokens, model)
-        except requests.exceptions.ConnectionError:
-            return "__LLM_OFFLINE__"
-        except requests.exceptions.Timeout:
-            return "__LLM_TIMEOUT__"
-        except Exception as e:
-            return f"__LLM_ERROR__: {str(e)}"
+            return _call_groq(prompt, system_prompt or "", temperature, max_tokens, resolved_model)
+        except Exception:
+            pass
 
     # No providers available
+    return "__LLM_OFFLINE__"
+
+def generate_response_streaming(
+    prompt: str,
+    system_prompt: str = None,
+    model: str = None,
+    temperature: float = 0.7,
+    max_tokens: int = 2048,
+):
+    """
+    Stream tokens from Ollama (primary) or Groq (fallback) as they arrive.
+    Synchronous generator yielding individual token strings.
+    """
+    if OLLAMA_ENABLED:
+        try:
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": prompt})
+
+            payload = {
+                "model": model or DEFAULT_MODEL,
+                "messages": messages,
+                "stream": True,
+                "options": {"temperature": temperature, "num_predict": max_tokens},
+            }
+            base_url = get_ollama_base_url()
+            resp = requests.post(f"{base_url}/api/chat", json=payload, stream=True, timeout=GENERATE_TIMEOUT)
+            resp.raise_for_status()
+
+            for line in resp.iter_lines(decode_unicode=True):
+                if line:
+                    import json as _json
+                    try:
+                        data = _json.loads(line)
+                        content = data.get("message", {}).get("content", "")
+                        if content:
+                            yield content
+                    except _json.JSONDecodeError:
+                        continue
+            return
+        except Exception:
+            pass  # Fall through to Groq
+
+    # Fallback: Groq streaming
+    from groq import Groq
+    groq_key = _get_groq_key()
     if not groq_key:
-        return "__LLM_OFFLINE__"
-    return "__LLM_ERROR__: All providers failed"
+        yield "__LLM_OFFLINE__"
+        return
+
+    client = Groq(api_key=groq_key)
+    messages = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+
+    stream = client.chat.completions.create(
+        model=model or GROQ_MODEL,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        stream=True,
+    )
+
+    for chunk in stream:
+        delta = chunk.choices[0].delta
+        if delta and delta.content:
+            yield delta.content
 
 
 def generate_tutoring_response(
@@ -183,6 +317,8 @@ def generate_tutoring_response(
     student_question: str,
     mastery: int = 0,
     model: str = None,
+    provider: str = None,                    # 'groq' | 'nvidia' | None (auto)
+    extra_system_instruction: str = None,    # explain-mode prefix (eli5, researcher, etc.)
     # Student Digital Twin — all optional, safe to omit
     weak_topics: list = None,
     strong_topics: list = None,
@@ -240,7 +376,12 @@ def generate_tutoring_response(
         if ctx_lines:
             context_block = "\n=== Recent Conversation ===\n" + "\n".join(ctx_lines) + "\n"
 
-    system_prompt = f"""You are Synapse, an expert adaptive AI tutor.
+    # Explain-mode tone block (prepended before everything else)
+    mode_block = ""
+    if extra_system_instruction:
+        mode_block = f"=== Response Tone ===\n{extra_system_instruction}\n\n"
+
+    system_prompt = f"""{mode_block}You are Synapse, an expert adaptive AI tutor.
 
 === Student Profile ===
 Topic: {topic}
@@ -273,9 +414,12 @@ Be thorough, encouraging, and fully adapted to {level} level."""
         prompt=student_question,
         system_prompt=system_prompt,
         model=model,
+        provider=provider,
         temperature=0.7,
         max_tokens=3000
     )
+
+
 
     # ── Fallback Handling ────────────────────────────────────────────────────
     fallback_used = False

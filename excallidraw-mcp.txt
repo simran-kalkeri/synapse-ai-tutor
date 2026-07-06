@@ -1,0 +1,14 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "excalidraw": {
+      "type": "local",
+      "command": ["node", "/absolute/path/to/mcp_excalidraw/dist/index.js"],
+      "enabled": true,
+      "environment": {
+        "EXPRESS_SERVER_URL": "http://127.0.0.1:3000",
+        "ENABLE_CANVAS_SYNC": "true"
+      }
+    }
+  }
+}

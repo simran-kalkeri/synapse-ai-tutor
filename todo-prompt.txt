@@ -1,0 +1,12 @@
+Your objective is to evolve Synapse AI Tutor into a world-class AI learning platform, not just an AI chatbot. Analyze the existing implementation and identify gaps in personalization, pedagogy, learning analytics, study workflows, and overall product experience. Then design and implement the missing capabilities while preserving all existing functionality.
+
+Focus on:
+
+Personalization: Adapt learning based on each student's strengths, weaknesses, pace, goals, learning history, and performance.
+Pedagogy: Implement evidence-based teaching strategies such as Socratic questioning, adaptive hints, scaffolded explanations, mastery learning, misconception detection, active recall, and spaced repetition across the application.
+Learning Analytics: Build meaningful dashboards showing mastery by topic, strengths/weaknesses, learning trends, confidence, predictions, study consistency, and actionable recommendations.
+Study Workflows: Introduce guided study sessions, daily learning plans, revision schedules, milestones, study goals, reminders, and personalized recommendations.
+Premium Product Experience: Ensure the application feels like a premium SaaS product with cohesive UX, thoughtful interactions, polished onboarding, empty/loading states, and a consistent design system.
+Scalability: Design these features as reusable, modular systems rather than isolated page-level implementations.
+
+Before implementing, identify what already exists, what is missing, and how each addition integrates into the current architecture. Reuse existing components wherever possible, avoid duplicate functionality, and maintain all existing business logic, APIs, and workflows. The final result should feel like a production-ready AI tutor capable of competing with modern educational platforms.

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Brain, Lock, User, AlertCircle, Zap } from 'lucide-react'
+import { Brain, Lock, User, AlertCircle, Zap, Sparkles } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 
 export default function LoginPage() {
@@ -30,155 +30,114 @@ export default function LoginPage() {
       await login('demo', 'demo123')
       navigate('/dashboard')
     } catch {
-      // try user1 fallback
-      try { await login('user1', 'synapse123'); navigate('/dashboard') } catch (e) {
-        setError('Demo login failed — please enter credentials manually')
-      }
+      setError('Demo login failed — please enter credentials manually')
     }
   }
 
   return (
     <div style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'radial-gradient(ellipse at 50% 0%, rgba(124,58,237,0.25) 0%, #0a0a1a 60%)',
-      padding: '1rem',
+      background: 'var(--bg-base)', padding: '16px', position: 'relative', overflow: 'hidden'
     }}>
-      {/* Animated background orbs */}
-      <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 0 }}>
-        {[0,1,2].map(i => (
-          <motion.div key={i}
-            animate={{ scale: [1, 1.1, 1], opacity: [0.3, 0.5, 0.3] }}
-            transition={{ duration: 4 + i * 2, repeat: Infinity, delay: i * 1.5 }}
-            style={{
-              position: 'absolute',
-              width: 300 + i * 100, height: 300 + i * 100,
-              borderRadius: '50%',
-              background: i === 0
-                ? 'radial-gradient(circle, rgba(124,58,237,0.15) 0%, transparent 70%)'
-                : i === 1
-                ? 'radial-gradient(circle, rgba(6,182,212,0.1) 0%, transparent 70%)'
-                : 'radial-gradient(circle, rgba(167,139,250,0.1) 0%, transparent 70%)',
-              left: `${[10, 60, 30][i]}%`,
-              top:  `${[20, 60, 80][i]}%`,
-              transform: 'translate(-50%,-50%)',
-            }}
-          />
-        ))}
-      </div>
+      {/* Subtle ambient background glow */}
+      <div style={{ position: 'absolute', top: '20%', left: '30%', width: '50vw', height: '50vw', background: 'radial-gradient(circle, var(--primary-subtle) 0%, transparent 60%)', opacity: 0.5, pointerEvents: 'none', transform: 'translate(-50%, -50%)' }} />
+      <div style={{ position: 'absolute', bottom: '10%', right: '10%', width: '40vw', height: '40vw', background: 'radial-gradient(circle, rgba(6,182,212,0.05) 0%, transparent 60%)', opacity: 0.5, pointerEvents: 'none', transform: 'translate(50%, 50%)' }} />
 
       <motion.div
-        initial={{ opacity: 0, y: 24, scale: 0.97 }}
+        initial={{ opacity: 0, y: 20, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.4, ease: 'easeOut' }}
-        style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 420 }}
+        style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: 400 }}
       >
-        {/* Card */}
-        <div className="glass" style={{ padding: '2.5rem 2rem', boxShadow: '0 0 60px rgba(124,58,237,0.2), 0 25px 50px rgba(0,0,0,0.5)' }}>
-          {/* Header */}
-          <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-            <motion.div
-              animate={{ boxShadow: ['0 0 20px rgba(124,58,237,0.4)', '0 0 40px rgba(124,58,237,0.7)', '0 0 20px rgba(124,58,237,0.4)'] }}
-              transition={{ duration: 2, repeat: Infinity }}
-              style={{
-                width: 60, height: 60, borderRadius: 16, margin: '0 auto 16px',
-                background: 'linear-gradient(135deg, #7c3aed, #06b6d4)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              <Zap size={28} color="#fff" />
-            </motion.div>
-            <h1 className="gradient-text" style={{ fontSize: '1.8rem', fontWeight: 800, marginBottom: 6 }}>
-              Synapse AI Tutor
+        <div style={{ padding: '40px', borderRadius: 24, background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-md)' }}>
+          
+          <div style={{ textAlign: 'center', marginBottom: 32 }}>
+            <div style={{ width: 56, height: 56, borderRadius: 16, background: 'var(--primary)', margin: '0 auto 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px var(--primary-subtle)' }}>
+              <Sparkles size={24} color="#fff" />
+            </div>
+            <h1 style={{ fontSize: '24px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8, letterSpacing: '-0.02em' }}>
+              Welcome to Synapse
             </h1>
-            <p style={{ color: '#64748b', fontSize: 14 }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 15 }}>
               Your adaptive AI learning companion
             </p>
           </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {/* Username */}
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ position: 'relative' }}>
-              <User size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
+              <User size={18} style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               <input
                 type="text" value={username} onChange={e => setUsername(e.target.value)}
                 placeholder="Username" required autoFocus
                 style={{
-                  width: '100%', padding: '12px 12px 12px 38px',
-                  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(124,58,237,0.25)',
-                  borderRadius: 10, color: '#f1f5f9', fontSize: 14, outline: 'none',
-                  transition: 'border-color 0.2s',
+                  width: '100%', padding: '14px 16px 14px 44px',
+                  background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
+                  borderRadius: 12, color: 'var(--text-primary)', fontSize: 15, outline: 'none',
+                  transition: 'border-color 0.2s', boxSizing: 'border-box'
                 }}
-                onFocus={e => e.target.style.borderColor = '#7c3aed'}
-                onBlur={e => e.target.style.borderColor = 'rgba(124,58,237,0.25)'}
+                onFocus={e => e.target.style.borderColor = 'var(--primary)'}
+                onBlur={e => e.target.style.borderColor = 'var(--border-subtle)'}
               />
             </div>
-            {/* Password */}
+            
             <div style={{ position: 'relative' }}>
-              <Lock size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
+              <Lock size={18} style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
               <input
                 type="password" value={password} onChange={e => setPassword(e.target.value)}
                 placeholder="Password" required
                 style={{
-                  width: '100%', padding: '12px 12px 12px 38px',
-                  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(124,58,237,0.25)',
-                  borderRadius: 10, color: '#f1f5f9', fontSize: 14, outline: 'none',
-                  transition: 'border-color 0.2s',
+                  width: '100%', padding: '14px 16px 14px 44px',
+                  background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
+                  borderRadius: 12, color: 'var(--text-primary)', fontSize: 15, outline: 'none',
+                  transition: 'border-color 0.2s', boxSizing: 'border-box'
                 }}
-                onFocus={e => e.target.style.borderColor = '#7c3aed'}
-                onBlur={e => e.target.style.borderColor = 'rgba(124,58,237,0.25)'}
+                onFocus={e => e.target.style.borderColor = 'var(--primary)'}
+                onBlur={e => e.target.style.borderColor = 'var(--border-subtle)'}
               />
             </div>
 
-            {/* Error */}
             {error && (
-              <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderRadius: 8, background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.25)', color: '#fca5a5', fontSize: 13 }}>
-                <AlertCircle size={14} />
+              <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', borderRadius: 12, background: 'var(--danger-subtle)', border: '1px solid var(--danger)', color: 'var(--danger)', fontSize: 14, fontWeight: 500 }}>
+                <AlertCircle size={16} />
                 {error}
               </motion.div>
             )}
 
-            {/* Submit */}
-            <motion.button type="submit" disabled={isLoading} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
+            <motion.button type="submit" disabled={isLoading} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
               style={{
-                padding: '13px', borderRadius: 10, border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer',
-                background: isLoading ? 'rgba(124,58,237,0.4)' : 'linear-gradient(135deg, #7c3aed, #6d28d9)',
-                color: '#fff', fontWeight: 600, fontSize: 15,
-                boxShadow: isLoading ? 'none' : '0 4px 20px rgba(124,58,237,0.4)',
-                transition: 'all 0.2s', marginTop: 4,
+                width: '100%', padding: '14px', borderRadius: 12, border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer',
+                background: isLoading ? 'var(--bg-surface)' : 'var(--text-primary)',
+                color: isLoading ? 'var(--text-muted)' : 'var(--bg-base)', fontWeight: 600, fontSize: 15,
+                transition: 'all 0.2s', marginTop: 8,
               }}>
               {isLoading ? 'Signing in…' : 'Sign In'}
             </motion.button>
           </form>
 
-          {/* Divider */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '16px 0', color: '#475569', fontSize: 13 }}>
-            <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '24px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+            <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
             or
-            <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
+            <div style={{ flex: 1, height: 1, background: 'var(--border-subtle)' }} />
           </div>
 
-          {/* Demo */}
-          <motion.button onClick={handleDemo} whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
+          <motion.button onClick={handleDemo} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
             style={{
-              width: '100%', padding: '12px', borderRadius: 10, cursor: 'pointer',
-              background: 'rgba(124,58,237,0.08)', border: '1px solid rgba(124,58,237,0.25)',
-              color: '#a78bfa', fontWeight: 500, fontSize: 14, transition: 'all 0.2s',
+              width: '100%', padding: '12px', borderRadius: 12, cursor: 'pointer',
+              background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)',
+              color: 'var(--text-primary)', fontWeight: 500, fontSize: 14, transition: 'all 0.2s',
             }}>
-            ⚡ Try Demo Account
+            Try Demo Account
           </motion.button>
 
-          {/* Hint */}
-          <p style={{ textAlign: 'center', marginTop: 16, fontSize: 12, color: '#475569' }}>
-            Demo: <code style={{ color: '#7c3aed' }}>user1</code> / <code style={{ color: '#7c3aed' }}>synapse123</code>
+          <p style={{ textAlign: 'center', marginTop: 24, fontSize: 13, color: 'var(--text-muted)' }}>
+            Demo credentials: <strong>demo</strong> / <strong>demo123</strong>
           </p>
         </div>
 
-        {/* Badges */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginTop: 24 }}>
           {['Groq Powered', 'RAG + GraphRAG', 'Voice I/O'].map(b => (
-            <div key={b} style={{ fontSize: 11, color: '#64748b', padding: '4px 10px', borderRadius: 99, border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)' }}>
+            <div key={b} style={{ fontSize: 12, color: 'var(--text-secondary)', padding: '4px 12px', borderRadius: 99, border: '1px solid var(--border-subtle)', background: 'var(--bg-elevated)', fontWeight: 500 }}>
               {b}
             </div>
           ))}

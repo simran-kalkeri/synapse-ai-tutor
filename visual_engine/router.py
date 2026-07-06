@@ -5,6 +5,64 @@ Returns a list of frame dicts (image/graph + caption).
 """
 from visualizers import linked_list, binary_search, recursion, transformer, neural_network, rag_pipeline
 
+
+# ── LLM-based classification ───────────────────────────────────────────────────
+
+def classify_visualization_with_llm(concept: str) -> str:
+    """
+    Use Ollama (primary) or Groq (fallback) to classify what type of
+    visualization best represents the given concept. Returns one of the
+    canonical type strings, or 'unknown' if the call fails.
+    """
+    valid = {
+        "neural_network", "transformer", "binary_search", "linked_list",
+        "recursion", "rag_pipeline", "flowchart", "tree", "graph", "unknown"
+    }
+    prompt = f"""Classify what type of visualization best represents: '{concept}'
+
+Return ONLY one word from this list (nothing else):
+neural_network, transformer, binary_search, linked_list, recursion, rag_pipeline, flowchart, tree, graph, unknown
+
+Concept: {concept}
+Visualization type:"""
+
+    # Try Ollama first
+    ollama_url = os.getenv("OLLAMA_BASE_URL", "http://10.1.17.65:11434")
+    ollama_model = os.getenv("OLLAMA_MODEL", "llama3")
+    try:
+        import requests as _req
+        resp = _req.post(
+            f"{ollama_url}/api/chat",
+            json={
+                "model": ollama_model,
+                "messages": [{"role": "user", "content": prompt}],
+                "stream": False,
+                "options": {"temperature": 0, "num_predict": 10},
+            },
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            content = resp.json().get("message", {}).get("content", "").strip().lower()
+            if content in valid:
+                return content
+    except Exception:
+        pass
+
+    # Fallback to Groq
+    try:
+        from groq import Groq
+        client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+        response = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=10,
+            temperature=0
+        )
+        result = response.choices[0].message.content.strip().lower()
+        return result if result in valid else "unknown"
+    except Exception:
+        return "unknown"
+
 # graph_renderer kept for future Graphviz-based visualizers — import lazily if needed
 def _render_graphviz(dot_graph):
     try:
@@ -113,7 +171,15 @@ def generate_visualization(payload: dict) -> list[dict]:
         Each dict: {'image': PIL.Image.Image, 'caption': str}
     """
     raw_topic = str(payload.get("topic", "")).lower().strip()
-    canonical = TOPIC_MAP.get(raw_topic)
+
+    # 1. Try LLM classification first
+    llm_canonical = classify_visualization_with_llm(raw_topic)
+
+    # 2. Fall back to TOPIC_MAP if LLM returns unknown or topic is empty
+    if llm_canonical and llm_canonical != "unknown":
+        canonical = llm_canonical
+    else:
+        canonical = TOPIC_MAP.get(raw_topic)
 
     if canonical is None:
         return _fallback_frames(payload)

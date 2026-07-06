@@ -1,0 +1,328 @@
+# improvements.txt — Synapse AI Tutor Read-Only Analysis
+
+> Read-only audit of the entire codebase at commit time. No code was modified.
+> Grouped by severity and domain. File:line references are relative to repo root.
+
+---
+
+## 1. CRITICAL — Committed Secrets
+
+### 1.1 Live GROQ_API_KEY committed
+`backend/.env:9` — A real, usable Groq API key is committed to the repo.
+Fix: Rotate the key at console.groq.com immediately. Add `backend/.env` to `.gitignore`. Remove from git history with `git rm --cached backend/.env`.
+
+### 1.2 Live NVIDIA_API_KEY committed
+`backend/.env:16` — Same situation: a live NVIDIA NIM API key is committed.
+Fix: Rotate at build.nvidia.com. Same remediation as 1.1.
+
+### 1.3 `.gitignore` does not protect `backend/.env`
+`.gitignore:4` — Pattern `.env` and `*.env` only match root-level `.env`. `backend/.env` is not excluded, which is why the secret-containing file is tracked.
+Fix: Change `*.env` to `**/*.env` or add `backend/.env` explicitly.
+
+---
+
+## 2. HIGH — Architecture & Correctness
+
+### 2.1 Two complete LLM client implementations
+- `synapse_ai_tutor/backend/llm_client.py` (legacy, ~400 lines)
+- `synapse_ai_tutor/ai/llm/client.py` (canonical, ~200 lines)
+
+Both implement `_call_groq`, `_call_ollama`, `_call_nvidia` with different error handling, magic strings vs exceptions, timeouts, and parameter defaults. `backend/llm_client.py` is imported by `note_generator.py` and legacy Streamlit code. `ai/llm/client.py` is the canonical new code with proper exception hierarchy (`LLMError`, `LLMTimeoutError`, `LLMOfflineError`) but is NOT imported by any backend router.
+Fix: Deprecate `backend/llm_client.py`. Route all callers through `ai/llm/client.py`. Magic string returns (`__LLM_OFFLINE__`, `__LLM_TIMEOUT__`) should be replaced with exception propagation.
+
+### 2.2 Two complete RAG implementations + ~842 lines of dead Phase 5 code
+Active:
+- `synapse_ai_tutor/backend/rag.py` — `RAGPipeline` used by `backend/main.py`
+- `synapse_ai_tutor/ai/rag/pipeline.py` — thin re-export wrapper
+
+Dead code (fully built, never imported by any router):
+- `ai/rag/hybrid_retriever.py` (249 lines) — `HybridRetriever`, `BM25Index`, `reciprocal_rank_fusion`
+- `ai/rag/reranker.py` (105 lines) — `CrossEncoderReranker`, `CohereReranker`
+- `ai/rag/citation_generator.py` (115 lines) — `generate_citations`, `format_source_block`
+- `ai/rag/compressor.py` (98 lines) — `extractive_compress`, `abstractive_compress`
+- `ai/rag/chunking.py` (202 lines) — `SemanticChunk`, `chunk_text_semantic`
+- `ai/evaluation/evaluator.py` (73 lines) — `evaluate_response`, `measure_groundedness`
+
+Additionally, the Phase 5 modules assume object-based chunks (`RetrievalCandidate` dataclass with attribute access like `chunk.text`), but the existing pipeline returns plain dicts (`chunk["text"]`). Direct integration would raise `AttributeError`.
+Fix: Either wire the Phase 5 modules into the live pipeline with the necessary adapter, or remove them to eliminate dead code.
+
+### 2.3 JSON storage race conditions — three separate lock domains for same file
+- `progress_tracker.py` uses `_PROGRESS_LOCK` (module-level `threading.Lock()`)
+- `JSONProgressRepository` in `json_store.py` uses `self._lock` (instance-level)
+- `JSONRoadmapRepository` in `json_store.py` uses its own `self._lock`
+
+All three write to `progress.json`. The locks are **different objects**, so concurrent writes from different code paths can interleave.
+Fix: Route all progress writes through a single repository or share a single lock.
+
+### 2.4 JSONNoteRepository has no lock at all
+`synapse_ai_tutor/storage/json_store.py:208-266` — `save_note()` opens a file for writing with zero synchronization. Concurrent note saves will corrupt data.
+Fix: Add `self._lock = threading.Lock()` in `__init__` and acquire in `save_note()` and `delete_note()`.
+
+### 2.5 Student memory key structure mismatch between two writers
+- `student_memory.py` stores conversations under `data["students"][username]["conversation_history"][topic]`
+- `JSONMemoryRepository` stores under `data[username]["conversations"][topic]`
+
+Both write to `student_memory.json` via different code paths. Writes from one are invisible to the other.
+Fix: Align key structures or consolidate through one code path.
+
+### 2.6 Two legacy auth user tables with overlapping users
+- `synapse_ai_tutor/backend/auth.py` has: `user1`, `user2`, `user3`, `user4`, `demo`
+- `synapse_ai_tutor/services/auth_service.py` has: `simran`, `dev`, `demo`, `test`, `admin`
+
+`demo` exists in both with different hashes. The `simran` user's hash (line 127-129) is a raw 64-char hex string with no provenance — it may be invalid.
+Fix: Consolidate all legacy users into one location with verified hashes.
+
+### 2.7 Duplicate Alembic migration revisions
+`synapse_ai_tutor/storage/migrations/versions/` contains two `initial_schema` revisions:
+- `f9915252fcd0_initial_schema.py` (full DDL)
+- `2767374e0cc3_initial_schema.py` (depends on the first, but `upgrade()` is just `pass` — a NOOP)
+
+Running `alembic upgrade head` applies the first migration and no-ops the second. The chain is broken.
+Fix: Merge into one revision or delete the NOOP revision and rebase heads.
+
+### 2.8 PG repositories return ORM objects, not serializable dicts
+`synapse_ai_tutor/storage/repositories/pg_repos.py` — methods like `get_notes()`, `get_goals()`, `get_quiz_results()` return raw SQLAlchemy ORM instances. FastAPI can't serialize these to JSON.
+Fix: Add dict conversion or Pydantic model serialization before returning from repository methods.
+
+### 2.9 `PGProgressRepository` is an empty shell
+`synapse_ai_tutor/storage/repositories/pg_repos.py:139-142` — Takes a session in `__init__` but has zero methods. Progress methods are in `PGMentorRepository` instead, violating single-responsibility.
+Fix: Move progress methods into `PGProgressRepository` or rename `PGMentorRepository`.
+
+---
+
+## 3. HIGH — Frontend Correctness
+
+### 3.1 Auth `hydrate()` never attempts token refresh
+`frontend/src/store/authStore.ts:52-63` — If the access token is expired, `hydrate()` immediately logs the user out. It never tries the refresh token first.
+Fix: In the `catch` block, attempt `POST /api/v1/auth/refresh` before clearing credentials.
+
+### 3.2 Race condition in 401 refresh interceptor
+`frontend/src/lib/api.ts:21-46` — When multiple requests get 401 simultaneously, each fires its own refresh call. If the backend invalidates old refresh tokens on use, all but the first refresh fail and the entire session is wiped.
+Fix: Implement a shared refresh promise mutex. All concurrent 401s await the same refresh promise.
+
+### 3.3 Provider toggle in TutorPage does nothing
+`frontend/src/features/tutor/TutorPage.tsx:308,337-341` — The "Fast" / "Pro" UI toggle sets a `provider` state variable, but `provider` is never included in the `streamSSE` request body. The backend always auto-routes.
+Fix: Either remove the dead toggle UI or pass `provider` in the SSE request body.
+
+### 3.4 "Ask AI" button on Whiteboard is a stub
+`frontend/src/features/whiteboard/WhiteboardPage.tsx:336-341` — `handleAskAI` only shows a toast "AI analysis coming soon!". No API call is made.
+Fix: Wire the canvas image data to an actual endpoint, or remove the button.
+
+### 3.5 No typed API responses — entire frontend loses type safety
+`frontend/src/lib/api.ts:51-108` — Every API helper returns `AxiosResponse<any>`. All downstream code gets `any`, defeating TypeScript's `strict: true`.
+Fix: Add response type generics to all API helpers (e.g., `api.post<TokenResponse>(...)`).
+
+---
+
+## 4. MEDIUM — Backend Quality & Polish
+
+### 4.1 `print()` calls instead of structured logging in rag.py
+`synapse_ai_tutor/backend/rag.py:59,65,76,80,87,91,98,99,103,105` — 10+ bare `print()` calls bypass the structlog logging system configured in `logging_config.py`.
+Fix: Replace all with `logger.info()` / `logger.error()`.
+
+### 4.2 `logger.warning(f"...")` uses f-strings instead of structured logging
+`synapse_ai_tutor/backend/student_memory.py:89,114,135,156,207,261-264,318-320,338,355,457` — Multiple calls use f-string interpolation with structlog, which defeats structured log parsing.
+Fix: Convert to `logger.warning("template", key=value)`.
+
+### 4.3 `import json` imported twice in knowledge_graph.py
+`synapse_ai_tutor/backend/knowledge_graph.py:17,328` — Same module imported twice under different names.
+Fix: Remove the second import.
+
+### 4.4 `gTTS` cache eviction runs at module import time
+`synapse_ai_tutor/backend/tts.py:106-109` — `evict_audio_cache()` scans and deletes files during module import, adding I/O latency to FastAPI startup.
+Fix: Move eviction to a background task or lazy first-call trigger.
+
+### 4.5 Bare `except:` swallows SystemExit / KeyboardInterrupt in llm_client.py
+`synapse_ai_tutor/backend/llm_client.py:225-226,238-243` — `except Exception as e:` catches all exceptions. Should catch specific request/groq exceptions.
+Fix: Narrow exception types.
+
+### 4.6 `LLMError` import is dead — the except block never triggers
+`synapse_ai_tutor/backend/note_generator.py:13,87-88` — `generate_response()` returns magic strings, never raises `LLMError`. The `except LLMError` block is dead code.
+Fix: Remove the dead except block or switch to `ai/llm/client.py` which does raise proper exceptions.
+
+### 4.7 `JWT_SECRET_KEY` missing raises at import time in `dependencies.py` but has fallback in `auth_service.py`
+`backend/dependencies.py:28-29` raises `RuntimeError` if key missing. `services/auth_service.py:47-55` silently generates a per-process random key. Two different behaviors.
+Fix: Align both to the same strategy (either both raise or both fallback).
+
+### 4.8 `ai/rag/citation_generator.py:format_source_block` uses `getattr` on objects typed as `list`
+`synapse_ai_tutor/ai/rag/citation_generator.py:87-115` — Assumes items are objects with `.source`, `.page`, `.text`. Existing pipeline returns dicts. Would raise `AttributeError`.
+Fix: Accept both objects and dicts (`hasattr` check or type union).
+
+### 4.9 `groq.Client` created fresh on every call
+`synapse_ai_tutor/ai/llm/client.py:70-71` — `Groq(api_key=api_key)` re-initialized per invocation. The Groq client is thread-safe for chat completions.
+Fix: Reuse a module-level client instance.
+
+### 4.10 `CHUNKS_PATH` defaults to `.pkl` but chunking writes `.json`
+`synapse_ai_tutor/config/settings.py:109-110` — Default `CHUNKS_PATH` points to `chunks.pkl`, but `backend/chunking.py` `save_chunks()` / `load_chunks()` default to `chunks.json`.
+Fix: Change default in settings.py to `chunks.json`.
+
+### 4.11 `quality_from_correct()` has unreachable code after return
+`synapse_ai_tutor/services/memory_service.py:159` — All `if/elif/else` branches return; line 159 `return 0` is dead.
+Fix: Remove the unreachable line.
+
+---
+
+## 5. MEDIUM — Frontend Quality & UX
+
+### 5.1 Guards return `null` during hydration — blank screen flash
+`frontend/src/router/guards.tsx:7,14` — Both `ProtectedRoute` and `PublicRoute` render nothing while `!isHydrated`. No loading spinner.
+Fix: Render a minimal spinner while hydrating.
+
+### 5.2 Demo hint shows wrong credentials
+`frontend/src/features/auth/LoginPage.tsx:137` — Hint says `user1 / synapse123` but the auto-fill handler uses `demo / demo123`. `user1` does not match any seeded account.
+Fix: Change hint to `demo / demo123`.
+
+### 5.3 Dashboard has no loading or error states for any query
+`frontend/src/features/dashboard/DashboardPage.tsx:61-80` — All 4 `useQuery` calls have zero loading/error handling. Slow/failing backend renders zeros and empty charts silently.
+Fix: Add loading skeletons and error banners for each dashboard section.
+
+### 5.4 Assessment mutations have no `onError` handlers
+`frontend/src/features/assessment/AssessmentPage.tsx:66-78` — `startMutation` and `submitMutation` lack error callbacks. Failure leaves user stuck at "Generating..." forever.
+Fix: Surface mutation errors via toast or inline error.
+
+### 5.5 No aria-labels on any form inputs
+`frontend/src/features/auth/LoginPage.tsx:72-100`, `NotesPage.tsx:162-165` — All `<input>` and `<select>` elements lack accessible labels.
+Fix: Add `<label htmlFor="...">` with matching `id`, or `aria-label` attributes.
+
+### 5.6 Inline `@keyframes spin` duplicated 4 times
+`frontend/src/App.tsx:48`, `TutorPage.tsx:519`, `NotesPage.tsx:193`, `RoadmapPage.tsx:167` — Same CSS animation defined inline four times.
+Fix: Define once in `index.css` and remove the inline `<style>` blocks.
+
+### 5.7 SSE client has no reconnection logic
+`frontend/src/lib/sse.ts:17-102` — If the stream drops mid-response, the client calls `onError` and terminates. No automatic retry.
+Fix: Implement exponential backoff reconnection when the stream drops before a `done` event.
+
+### 5.8 SSE client has no heartbeat / timeout
+`frontend/src/lib/sse.ts:47-89` — If the server stops sending data but the TCP connection stays open, the reader blocks forever.
+Fix: Add a timeout watchdog that fires if no data received for N seconds.
+
+### 5.9 `sendMessage` useCallback rebuilt on every keystroke
+`frontend/src/features/tutor/TutorPage.tsx:316-382` — Deps array includes `input`, which changes every keystroke, defeating `useCallback`.
+Fix: Use a ref for `input` inside the callback.
+
+### 5.10 D3 zoom creates new behavior on every button press
+`frontend/src/features/graph/KnowledgeGraphPage.tsx:139-144` — `handleZoom` creates a fresh `d3.zoom()` instance each call.
+Fix: Store the zoom behavior in a ref and reuse it.
+
+### 5.11 RoadmapPage useState not synced with URL param changes
+`frontend/src/features/roadmap/RoadmapPage.tsx:83-87` — `useState(topicParam ?? TOPICS[0])` initializes from URL param, but back/forward navigation won't re-trigger the effect.
+Fix: Use `useMemo` or add `useEffect` to sync.
+
+### 5.12 Tailwind v4 is effectively unused — all pages use inline styles
+Every `.tsx` file — Zero Tailwind utility classes in component markup. All styling uses inline `style={{}}` objects with CSS custom properties. This negates Tailwind's design token system, responsive utilities, dark mode variants, and bundle size benefits.
+Fix: Gradually migrate inline styles to Tailwind utility classes, or remove Tailwind from dependencies to reduce install bloat.
+
+### 5.13 Google Fonts loaded twice
+`frontend/index.html:11-13` + `frontend/src/index.css:2` — Inter and JetBrains Mono loaded via both `<link>` and `@import`, triggering duplicate downloads.
+Fix: Remove the CSS `@import` (keep only the `<link>` tag in `index.html`).
+
+---
+
+## 6. MEDIUM — Infrastructure & DevOps
+
+### 6.1 No CI/CD pipeline
+`.github/` directory does not exist. No workflows for lint, test, build, or deploy.
+Fix: Create `.github/workflows/ci.yml` for automated linting (`npm run lint`), type-check (`tsc -b`), backend tests (`python -m pytest`), and Docker build on push/PR.
+
+### 6.2 No `.dockerignore`
+Docker build context includes `node_modules/`, `.venv/`, `.git/`, __pycache__, and the committed `backend/.env` with live secrets.
+Fix: Create `.dockerignore` excluding `node_modules/`, `.venv/`, `.git/`, `__pycache__/`, `*.pyc`, `.env`, `frontend/dist/`, `synapse_ai_tutor/data/`.
+
+### 6.3 No Content-Security-Policy header in Nginx
+`nginx/nginx.conf` — Missing CSP header for an app rendering LLM-generated markdown.
+Fix: Add `add_header Content-Security-Policy` directive.
+
+### 6.4 Docker healthcheck has no `start_period`
+`docker-compose.yml:28-32` — RAG pipeline loading (sentence-transformers, FAISS) can take 30-120s on cold start. Healthcheck may fail during legitimate startup.
+Fix: Add `start_period: 120s` to the backend healthcheck.
+
+### 6.5 No resource limits in docker-compose
+`docker-compose.yml` — Neither backend nor nginx service declares `deploy.resources.limits`.
+Fix: Add memory limits (e.g., 2G for backend, 128M for nginx).
+
+### 6.6 No Node.js version constraint
+Missing `.nvmrc` or `engines` field in `frontend/package.json`.
+Fix: Add `"engines": { "node": ">=20.0.0" }` and create `.nvmrc` with `20`.
+
+### 6.7 Two overlapping requirements.txt files
+- `backend/requirements.txt` — FastAPI deps
+- `synapse_ai_tutor/requirements.txt` — Streamlit legacy deps
+
+Significant overlap. Dockerfile installs both (doubling pip time). Missing a dep in one file causes runtime errors.
+Fix: Consolidate into a single `requirements.txt`.
+
+### 6.8 `postcss` and `autoprefixer` in frontend devDependencies but unused
+`frontend/package.json:43,45` — Tailwind v4 uses `@tailwindcss/vite` plugin, not PostCSS. No `postcss.config.js` exists.
+Fix: Remove both from `devDependencies`.
+
+---
+
+## 7. LOW — Documentation & Polish
+
+### 7.1 `walkthrough.md` describes the legacy Streamlit architecture in 711 lines
+`walkthrough.md` — Entirely about the old Streamlit MVP (`index.html`, `app.py`, `pages/`, `st.audio_input()`). Misleading for anyone reading it today.
+Fix: Delete or add a prominent "LEGACY — see AGENTS.md for current architecture" banner.
+
+### 7.2 `implementation_plan.md` describes a migration that is already complete
+`implementation_plan.md` (944 lines) — Proposes the Streamlit→FastAPI+React migration. The migration is done. This document is now historical.
+Fix: Archive or delete. Mark completed phases as done.
+
+### 7.3 `synapse_ai_tutor/README.md` claims Python 3.9+, but the project requires 3.12+
+`synapse_ai_tutor/README.md:94` says "Python 3.9+". The Dockerfile uses `python:3.12-slim`. Root README says "Python 3.12+".
+Fix: Update or remove the legacy README.
+
+### 7.4 `test_minimal.py` is a 2-line Streamlit smoke test, not a real test
+`synapse_ai_tutor/test_minimal.py` — Just `import streamlit as st; st.write("hello world")`. Not run by any test runner.
+Fix: Delete.
+
+### 7.5 Demo passwords documented inconsistently between README and LoginPage
+`README.md:178-183` and `LoginPage.tsx:137` show different credential hints. `synapse_ai_tutor/data/users.json` has 3 users (`demo/demo123`, `admin/admin123`, `student/student123`).
+Fix: Make all credential references consistent with the seeded users.
+
+### 7.6 `backend/.env.example` JWT placeholder differs from `docker-compose.yml`
+`.env.example:33` says `change-me-to-a-random-64-char-hex-string-for-production`. `docker-compose.yml:14` says `change-me-to-a-random-64-char-string-for-production` (no "hex-").
+Fix: Align the placeholder text.
+
+### 7.7 SSE client uses `response.body!` non-null assertion
+`frontend/src/lib/sse.ts:42` — If the response has no body (e.g., 204), this throws at runtime.
+Fix: Guard with `if (!response.body) { onError(...); return }`.
+
+### 7.8 `VITE_API_URL` in `.env.example` but not needed in dev
+`backend/.env.example:48` — The Vite proxy handles `/api` routing in dev. This env var is only for production builds.
+Fix: Add a comment: "Only needed in production builds (dev uses Vite proxy)."
+
+### 7.9 `start-dev.ps1` venv detection doesn't check `backend/.venv/`
+`start-dev.ps1:40-41` — Checks `..\venv\` and `..\synapse_ai_tutor\.venv\` but not `backend\.venv\`.
+Fix: Also check `.\venv\Scripts\Activate.ps1` relative to `backend/` directory.
+
+### 7.10 No `Cache-Control: no-cache` for SPA index.html in Nginx
+`nginx/nginx.conf` — The root location serving `index.html` has no cache directive. Browsers may cache an old `index.html` with stale JS bundle references.
+Fix: Add `add_header Cache-Control "no-cache, must-revalidate"` for `index.html`.
+
+### 7.11 No pre-commit hooks
+The repo has no `.husky/` or similar. `npm run lint` is manual only.
+Fix: Add husky with a pre-commit hook running `npm run lint` and type-check.
+
+### 7.12 Unused import `ActivityItem` in DashboardPage
+`frontend/src/features/dashboard/DashboardPage.tsx:17`
+Fix: Remove the import.
+
+### 7.13 `as never` type assertions in D3 graph code
+`frontend/src/features/graph/KnowledgeGraphPage.tsx:128-130,143,151`
+Fix: Use proper D3 types or type guards instead of force-casting.
+
+### 7.14 Inline `<style>` with `!important` in TutorPage
+`frontend/src/features/tutor/TutorPage.tsx:251-253` — `.assistant-msg:hover .msg-rating { opacity: 1 !important; }` bypasses Tailwind.
+Fix: Use Tailwind's `group-hover` pattern instead.
+
+---
+
+## 8. Summary Counts
+
+| Severity | Count |
+|----------|-------|
+| CRITICAL | 3 (all committed secrets + gitignore) |
+| HIGH | 14 (9 backend + 5 frontend) |
+| MEDIUM | 25 (11 backend + 13 frontend + 8 infra) |
+| LOW | 14 (documentation + minor polish) |
+| **Total** | **56** |

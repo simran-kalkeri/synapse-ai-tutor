@@ -47,16 +47,24 @@ class Settings(BaseSettings):
     NOTES_DIR: Path = _PROJECT_ROOT / "data" / "notes"
     STATIC_DIR: Path = _PROJECT_ROOT / "static"
 
-    # ── LLM — Groq (Primary) ─────────────────────────────────────────────
+    # ── LLM — Ollama (Primary) ──────────────────────────────────────────
+    # Remote Ollama server used for all LLM operations.
+    OLLAMA_ENABLED: bool = True
+    OLLAMA_BASE_URL: str = "http://10.1.17.65:11434"
+    OLLAMA_MODEL: str = "llama3"
+
+    # ── LLM — Groq (Fallback) ───────────────────────────────────────────
     GROQ_API_KEY: Optional[str] = None
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
     GROQ_TEMPERATURE: float = 0.7
     GROQ_MAX_TOKENS: int = 4096
 
-    # ── LLM — Ollama (Fallback) ──────────────────────────────────────────
-    OLLAMA_ENABLED: bool = False
-    OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_MODEL: str = "llama3"
+    # ── LLM — NVIDIA NIM (Secondary fallback) ───────────────────────────
+    NVIDIA_API_KEY: Optional[str] = None
+    NVIDIA_MODEL: str = "nvidia/nemotron-3-ultra-550b-a55b"
+    NVIDIA_BASE_URL: str = "https://integrate.api.nvidia.com/v1"
+    NVIDIA_MAX_TOKENS: int = 4096
+    NVIDIA_TEMPERATURE: float = 0.6
 
     # ── Database ──────────────────────────────────────────────────────────
     DATABASE_URL: str = "postgresql+asyncpg://synapse:synapse@localhost:5432/synapse_db"
@@ -68,7 +76,7 @@ class Settings(BaseSettings):
 
     GOOGLE_CLIENT_ID: Optional[str] = None
     GOOGLE_CLIENT_SECRET: Optional[str] = None
-    GOOGLE_REDIRECT_URI: str = "http://localhost:8501/auth/callback"
+    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/google/callback"
 
     # ── Voice ─────────────────────────────────────────────────────────────
     VOICE_MODE: str = "premium"
@@ -81,12 +89,17 @@ class Settings(BaseSettings):
     TTS_LANG: str = "en"
 
     # ── Embedding / RAG ───────────────────────────────────────────────────
-    EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
+    # IMPORTANT: This MUST match the model used to build the FAISS index.
+    # Currently: BAAI/bge-large-en-v1.5 (1024-dim vectors, higher quality)
+    # If you change this, delete data/chunks.pkl and data/faiss_index.bin
+    # and restart the backend to rebuild the index.
+    EMBEDDING_MODEL: str = "BAAI/bge-large-en-v1.5"
     FAISS_INDEX_PATH: Optional[Path] = None
     CHUNKS_PATH: Optional[Path] = None
     CHUNK_SIZE: int = 800
     CHUNK_OVERLAP: int = 150
     RAG_TOP_K: int = 5
+
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -106,12 +119,19 @@ class Settings(BaseSettings):
 
     @property
     def llm_provider(self) -> str:
-        """Return the active LLM provider name."""
-        if self.GROQ_API_KEY:
-            return "groq"
+        """Return the primary active LLM provider name."""
         if self.OLLAMA_ENABLED:
             return "ollama"
+        if self.GROQ_API_KEY:
+            return "groq"
+        if self.NVIDIA_API_KEY:
+            return "nvidia"
         return "none"
+
+    @property
+    def nvidia_enabled(self) -> bool:
+        """True when the NVIDIA NIM API is configured."""
+        return bool(self.NVIDIA_API_KEY)
 
 
 @lru_cache(maxsize=1)

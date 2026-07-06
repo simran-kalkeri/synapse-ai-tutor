@@ -211,6 +211,7 @@ class JSONNoteRepository(NoteRepository):
     def __init__(self):
         settings = get_settings()
         self._notes_dir = str(settings.NOTES_DIR)
+        self._lock = threading.Lock()
 
     def _sanitize(self, name: str) -> str:
         return name.lower().replace(" ", "_").replace("/", "_").replace("&", "and").replace("(", "").replace(")", "")
@@ -224,9 +225,10 @@ class JSONNoteRepository(NoteRepository):
         return os.path.join(self._user_dir(username), f"{self._sanitize(topic)}.md")
 
     def save_note(self, username: str, topic: str, content: str) -> str:
-        fp = self._filepath(username, topic)
-        with open(fp, "w", encoding="utf-8") as f:
-            f.write(content)
+        with self._lock:
+            fp = self._filepath(username, topic)
+            with open(fp, "w", encoding="utf-8") as f:
+                f.write(content)
         logger.info("note_saved", username=username, topic=topic, path=fp)
         return fp
 
@@ -256,11 +258,12 @@ class JSONNoteRepository(NoteRepository):
         return sorted(notes, key=lambda x: x["created_at"], reverse=True)
 
     def delete_note(self, username: str, topic: str) -> bool:
-        fp = self._filepath(username, topic)
-        if os.path.exists(fp):
-            os.remove(fp)
-            return True
-        return False
+        with self._lock:
+            fp = self._filepath(username, topic)
+            if os.path.exists(fp):
+                os.remove(fp)
+                return True
+            return False
 
     def note_exists(self, username: str, topic: str) -> bool:
         return os.path.exists(self._filepath(username, topic))
