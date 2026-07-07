@@ -3,6 +3,8 @@ Router — generate_visualization(payload)
 Routes topic+operation to the correct visualizer module.
 Returns a list of frame dicts (image/graph + caption).
 """
+import os
+
 from visualizers import linked_list, binary_search, recursion, transformer, neural_network, rag_pipeline
 
 
@@ -172,16 +174,19 @@ def generate_visualization(payload: dict) -> list[dict]:
     """
     raw_topic = str(payload.get("topic", "")).lower().strip()
 
-    # 1. Try LLM classification first
-    llm_canonical = classify_visualization_with_llm(raw_topic)
+    # Canonical types that have a visualizer implementation
+    HANDLED = {"linked_list", "binary_search", "recursion", "transformer", "neural_network", "rag_pipeline"}
 
-    # 2. Fall back to TOPIC_MAP if LLM returns unknown or topic is empty
-    if llm_canonical and llm_canonical != "unknown":
-        canonical = llm_canonical
-    else:
-        canonical = TOPIC_MAP.get(raw_topic)
+    # 1. Try TOPIC_MAP first (fast, deterministic)
+    canonical = TOPIC_MAP.get(raw_topic)
 
-    if canonical is None:
+    # 2. Fall back to LLM classification for unknown topics
+    if canonical is None or canonical not in HANDLED:
+        llm_canonical = classify_visualization_with_llm(raw_topic)
+        if llm_canonical in HANDLED:
+            canonical = llm_canonical
+
+    if canonical is None or canonical not in HANDLED:
         return _fallback_frames(payload)
 
     if canonical == "linked_list":

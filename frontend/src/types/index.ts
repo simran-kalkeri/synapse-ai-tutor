@@ -270,3 +270,10 @@ export const MASTERY_COLORS = {
   low:          '#ef4444',
   'not assessed': '#64748b',
 } as const
+
+export interface RagUploadResponse {
+  status: string
+  chunks_added: number
+  total_chunks: number
+  file: string
+}

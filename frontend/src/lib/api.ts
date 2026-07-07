@@ -62,6 +62,7 @@ import type {
   VisualizeResponse, VisualizeTopicsResponse,
   TTSResponse, STTResponse,
   AnalyticsData, StudyGoal,
+  RagUploadResponse,
 } from '@/types'
 
 export default api
@@ -140,6 +141,13 @@ export const chatApi = {
 
 export const ragApi = {
   status: () => api.get<{ ready: boolean; chunks: number }>('/api/v1/rag/status'),
+  upload: (file: File) => {
+    const fd = new FormData()
+    fd.append('file', file)
+    return api.post<RagUploadResponse>('/api/v1/rag/upload', fd, {
+      timeout: 120000,
+    })
+  },
 }
 
 export const visualizeApi = {

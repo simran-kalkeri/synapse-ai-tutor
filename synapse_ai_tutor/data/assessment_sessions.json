@@ -1,0 +1,219 @@
+{
+  "63c0d617-40ce-4ec5-b5c6-553639e0d5b6": {
+    "username": "demo",
+    "topic": "Fine-Tuning and RAG",
+    "questions": [
+      {
+        "question": "What are the main challenges when implementing Definition and purpose of foundational models?",
+        "options": [
+          "It is a deprecated approach that has been replaced by newer methodologies.",
+          "This technique was proven incorrect in recent peer-reviewed research.",
+          "It is exclusively used in computer vision and has no NLP applications.",
+          "Foundational models are large-scale machine learning systems trained on vast amounts of data that can be adapted to a wide range of downstream tasks with minimal fine-tuning."
+        ],
+        "correct_index": 3,
+        "correct_answer": "Foundational models are large-scale machine learning systems trained on vast amounts of data that can be adapted to a wide range of downstream tasks with minimal fine-tuning.",
+        "topic": "Fine-Tuning and RAG",
+        "difficulty": "easy",
+        "points": 1
+      },
+      {
+        "question": "How would you describe Virtue ethics for AI systems to a beginner?",
+        "options": [
+          "It is exclusively used in computer vision and has no NLP applications.",
+          "An approach focusing on developing AI systems that embody or promote virtuous character traits and ethical excellence.",
+          "It is a deprecated approach that has been replaced by newer methodologies.",
+          "This technique was proven incorrect in recent peer-reviewed research."
+        ],
+        "correct_index": 1,
+        "correct_answer": "An approach focusing on developing AI systems that embody or promote virtuous character traits and ethical excellence.",
+        "topic": "Fine-Tuning and RAG",
+        "difficulty": "easy",
+        "points": 1
+      },
+      {
+        "question": "How do Gemini's features affect the implementation of Definition and purpose of foundational models?",
+        "options": [
+          "This only applies to supervised learning and cannot be used in other contexts.",
+          "This concept is not relevant to Fine-Tuning and RAG and has no practical applications.",
+          "It is exclusively used in computer vision and has no NLP applications.",
+          "that can be adapted to a wide range of downstream tasks with minimal fine-tuning Foundational models are large-scale machine learning systems trained on vast amounts of data."
+        ],
+        "correct_index": 3,
+        "correct_answer": "that can be adapted to a wide range of downstream tasks with minimal fine-tuning Foundational models are large-scale machine learning systems trained on vast amounts of data.",
+        "topic": "Fine-Tuning and RAG",
+        "difficulty": "easy",
+        "points": 1
+      },
+      {
+        "question": "What are the basic principles of Definition and purpose of foundational models?",
+        "options": [
+          "It is exclusively used in computer vision and has no NLP applications.",
+          "This concept is not relevant to Fine-Tuning and RAG and has no practical applications.",
+          "It is a deprecated approach that has been replaced by newer methodologies.",
+          "Foundational models are large-scale machine learning systems trained on vast amounts of data that can be adapted to a wide range of downstream tasks with minimal fine-tuning."
+        ],
+        "correct_index": 3,
+        "correct_answer": "Foundational models are large-scale machine learning systems trained on vast amounts of data that can be adapted to a wide range of downstream tasks with minimal fine-tuning.",
+        "topic": "Fine-Tuning and RAG",
+        "difficulty": "easy",
+        "points": 1
+      },
+      {
+        "question": "Design a framework that leverages Virtue ethics for AI systems for enterprise-level AI governance.",
+        "options": [
+          "Notably, an approach focusing on developing ai systems that embody or promote virtuous character traits and ethical excellence.",
+          "This technique was proven incorrect in recent peer-reviewed research.",
+          "It is a deprecated approach that has been replaced by newer methodologies.",
+          "This only applies to supervised learning and cannot be used in other contexts."
+        ],
+        "correct_index": 0,
+        "correct_answer": "Notably, an approach focusing on developing ai systems that embody or promote virtuous character traits and ethical excellence.",
+        "topic": "Fine-Tuning and RAG",
+        "difficulty": "easy",
+        "points": 1
+      },
+      {
+        "question": "What are the key components of Transfer learning approaches?",
+        "options": [
+          "Transfer learning approaches is a fundamental concept in foundation models that relates to how these large-scale AI systems are designed, trained, and deployed.",
+          "It requires quantum computing resources and is not feasible with current hardware.",
+          "This only applies to supervised learning and cannot be used in other contexts.",
+          "This concept is not relevant to Fine-Tuning and RAG and has no practical applications."
+        ],
+        "correct_index": 0,
+        "correct_answer": "Transfer learning approaches is a fundamental concept in foundation models that relates to how these large-scale AI systems are designed, trained, and deployed.",
+        "topic": "Fine-Tuning and RAG",
+        "difficulty": "intermediate",
+        "points": 2
+      },
+      {
+        "question": "How might Retrieval-augmented generation (RAG) evolve in the next generation of language models?",
+        "options": [
+          "It requires quantum computing resources and is not feasible with current hardware.",
+          "RAG combines retrieval of relevant information from external sources with generative capabilities of language models.",
+          "It is exclusively used in computer vision and has no NLP applications.",
+          "It is a deprecated approach that has been replaced by newer methodologies."
+        ],
+        "correct_index": 1,
+        "correct_answer": "RAG combines retrieval of relevant information from external sources with generative capabilities of language models.",
+        "topic": "Fine-Tuning and RAG",
+        "difficulty": "intermediate",
+        "points": 2
+      },
+      {
+        "question": "Design a framework that leverages Deontological approaches to AI for enterprise-level AI governance.",
+        "options": [
+          "It requires quantum computing resources and is not feasible with current hardware.",
+          "This only applies to supervised learning and cannot be used in other contexts.",
+          "Ethical frameworks that evaluate AI systems based on adherence to moral duties, rules, and principles rather than outcomes alone.",
+          "This concept is not relevant to Fine-Tuning and RAG and has no practical applications."
+        ],
+        "correct_index": 2,
+        "correct_answer": "Ethical frameworks that evaluate AI systems based on adherence to moral duties, rules, and principles rather than outcomes alone.",
+        "topic": "Fine-Tuning and RAG",
+        "difficulty": "intermediate",
+        "points": 2
+      },
+      {
+        "question": "What are the main challenges when implementing Retrieval-augmented generation (RAG)?",
+        "options": [
+          "This technique was proven incorrect in recent peer-reviewed research.",
+          "It requires quantum computing resources and is not feasible with current hardware.",
+          "RAG combines retrieval of relevant information from external sources with generative capabilities of language models.",
+          "This concept is not relevant to Fine-Tuning and RAG and has no practical applications."
+        ],
+        "correct_index": 2,
+        "correct_answer": "RAG combines retrieval of relevant information from external sources with generative capabilities of language models.",
+        "topic": "Fine-Tuning and RAG",
+        "difficulty": "intermediate",
+        "points": 2
+      },
+      {
+        "question": "How does Retrieval-augmented generation (RAG) differ from traditional approaches?",
+        "options": [
+          "RAG combines retrieval of relevant information from external sources with generative capabilities of language models based on recent research.",
+          "This only applies to supervised learning and cannot be used in other contexts.",
+          "This concept is not relevant to Fine-Tuning and RAG and has no practical applications.",
+          "It requires quantum computing resources and is not feasible with current hardware."
+        ],
+        "correct_index": 0,
+        "correct_answer": "RAG combines retrieval of relevant information from external sources with generative capabilities of language models based on recent research.",
+        "topic": "Fine-Tuning and RAG",
+        "difficulty": "intermediate",
+        "points": 2
+      },
+      {
+        "question": "How can Regulation of agentic systems be optimized specifically for AWS Bedrock?",
+        "options": [
+          "This only applies to supervised learning and cannot be used in other contexts.",
+          "It requires quantum computing resources and is not feasible with current hardware.",
+          "Advanced implementation of Regulation of agentic systems on AWS Bedrock involves sophisticated strategies that leverage the platform's unique characteristics.",
+          "It is a deprecated approach that has been replaced by newer methodologies."
+        ],
+        "correct_index": 2,
+        "correct_answer": "Advanced implementation of Regulation of agentic systems on AWS Bedrock involves sophisticated strategies that leverage the platform's unique characteristics.",
+        "topic": "Fine-Tuning and RAG",
+        "difficulty": "hard",
+        "points": 3
+      },
+      {
+        "question": "Design a system that leverages Key components of AI agents for enterprise-level applications.",
+        "options": [
+          "It is exclusively used in computer vision and has no NLP applications.",
+          "It requires quantum computing resources and is not feasible with current hardware.",
+          "Components that allow agents to perceive their environment, including text inputs, visual systems, or data feeds.",
+          "It is a deprecated approach that has been replaced by newer methodologies."
+        ],
+        "correct_index": 2,
+        "correct_answer": "Components that allow agents to perceive their environment, including text inputs, visual systems, or data feeds.",
+        "topic": "Fine-Tuning and RAG",
+        "difficulty": "hard",
+        "points": 3
+      },
+      {
+        "question": "What limitations does AWS Bedrock impose on Performance optimization?",
+        "options": [
+          "Advanced implementation of Performance optimization on AWS Bedrock involves sophisticated strategies that leverage the platform's unique characteristics.",
+          "It requires quantum computing resources and is not feasible with current hardware.",
+          "It is exclusively used in computer vision and has no NLP applications.",
+          "This technique was proven incorrect in recent peer-reviewed research."
+        ],
+        "correct_index": 0,
+        "correct_answer": "Advanced implementation of Performance optimization on AWS Bedrock involves sophisticated strategies that leverage the platform's unique characteristics.",
+        "topic": "Fine-Tuning and RAG",
+        "difficulty": "hard",
+        "points": 3
+      },
+      {
+        "question": "What best practices should be followed for Memory and knowledge representation on AWS Bedrock?",
+        "options": [
+          "Advanced implementation of Memory and knowledge representation on AWS Bedrock involves sophisticated strategies that leverage the platform's unique characteristics.",
+          "This only applies to supervised learning and cannot be used in other contexts.",
+          "It requires quantum computing resources and is not feasible with current hardware.",
+          "This technique was proven incorrect in recent peer-reviewed research."
+        ],
+        "correct_index": 0,
+        "correct_answer": "Advanced implementation of Memory and knowledge representation on AWS Bedrock involves sophisticated strategies that leverage the platform's unique characteristics.",
+        "topic": "Fine-Tuning and RAG",
+        "difficulty": "hard",
+        "points": 3
+      },
+      {
+        "question": "What unique capabilities does AWS Bedrock offer for Long-term autonomy challenges?",
+        "options": [
+          "Advanced implementation of Long-term autonomy challenges on AWS Bedrock involves sophisticated strategies that leverage the platform's unique characteristics.",
+          "It is exclusively used in computer vision and has no NLP applications.",
+          "This concept is not relevant to Fine-Tuning and RAG and has no practical applications.",
+          "It is a deprecated approach that has been replaced by newer methodologies."
+        ],
+        "correct_index": 0,
+        "correct_answer": "Advanced implementation of Long-term autonomy challenges on AWS Bedrock involves sophisticated strategies that leverage the platform's unique characteristics.",
+        "topic": "Fine-Tuning and RAG",
+        "difficulty": "hard",
+        "points": 3
+      }
+    ],
+    "started_at": "2026-07-06T18:22:43.809504+00:00"
+  }
+}

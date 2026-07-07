@@ -4,6 +4,7 @@ import {
   Send, BookOpen, Lightbulb, Code2, HelpCircle,
   ExternalLink, Bot, User, ChevronDown, ChevronUp,
   ThumbsUp, ThumbsDown, Sparkles, Mic, MicOff, Volume2,
+  Paperclip, FileText,
 } from 'lucide-react'
 
 import ReactMarkdown from 'react-markdown'
@@ -11,7 +12,7 @@ import toast from 'react-hot-toast'
 import { streamSSE } from '@/lib/sse'
 import { useUIStore } from '@/store/uiStore'
 import api from '@/lib/api'
-import { voiceApi } from '@/lib/api'
+import { voiceApi, ragApi } from '@/lib/api'
 import type { SourceItem } from '@/types'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -314,6 +315,8 @@ export default function TutorPage() {
   const topicRef                      = useRef(topic)
   const explainModeRef                = useRef(explainMode)
   const voiceModeRef                  = useRef(voiceMode)
+  const [uploading, setUploading]     = useState(false)
+  const fileInputRef                  = useRef<HTMLInputElement>(null)
   const mediaRecorderRef              = useRef<MediaRecorder | null>(null)
   const audioChunksRef                = useRef<Blob[]>([])
   const audioRef                      = useRef<HTMLAudioElement | null>(null)
@@ -378,6 +381,23 @@ export default function TutorPage() {
     mediaRecorderRef.current?.stop()
     mediaRecorderRef.current = null
     setRecording(false)
+  }, [])
+
+  // ── File upload —────────────────────────────────────────────────────────
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    try {
+      const { data } = await ragApi.upload(file)
+      toast.success(`Uploaded "${data.file}" — ${data.chunks_added} chunks added (${data.total_chunks} total)`)
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Upload failed'
+      toast.error(msg)
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
   }, [])
 
   useEffect(() => { inputRef.current = input }, [input])
@@ -581,6 +601,34 @@ export default function TutorPage() {
                 {recording ? <MicOff size={16} /> : <Mic size={16} />}
               </motion.button>
             )}
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".pdf"
+              onChange={handleFileUpload}
+              style={{ display: 'none' }}
+            />
+
+            <motion.button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              title={uploading ? 'Uploading…' : 'Upload PDF'}
+              style={{
+                width: 36, height: 36, borderRadius: 10, border: 'none', cursor: 'pointer',
+                background: uploading ? 'var(--bg-hover)' : 'var(--bg-hover)',
+                color: uploading ? 'var(--primary)' : 'var(--text-muted)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'all 0.2s', flexShrink: 0,
+              }}
+            >
+              {uploading
+                ? <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid var(--border)', borderTopColor: 'var(--primary)', animation: 'spin 0.8s linear infinite' }} />
+                : <Paperclip size={16} />
+              }
+            </motion.button>
 
             <motion.button
               onClick={sendMessage}

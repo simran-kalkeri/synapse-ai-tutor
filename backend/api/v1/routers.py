@@ -306,8 +306,9 @@ async def rag_upload(file: UploadFile = File(...), username: str = Depends(get_u
         try:
             from backend.chunking import extract_text_from_pdf, create_chunks  # type: ignore
             pages = extract_text_from_pdf(str(dest))
-            all_text = "\n".join(p["text"] for p in pages)
-            chunks = create_chunks(all_text, source=str(dest))
+            for p in pages:
+                p["source"] = file.filename
+            chunks = create_chunks(pages)
             return chunks
         except Exception as e:
             raise RuntimeError(f"Failed to process PDF: {e}")

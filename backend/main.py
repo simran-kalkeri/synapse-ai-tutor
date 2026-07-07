@@ -131,22 +131,19 @@ async def lifespan(app: FastAPI):
     else:
         log.info("[SKIP] RAG Pipeline skipped (SKIP_RAG_INIT=1)")
 
-    # ── Knowledge Graph ───────────────────────────────────────────────────────
-    if not os.environ.get("SKIP_RAG_INIT"):
-        try:
-            from backend.knowledge_graph import build_knowledge_graph  # type: ignore
+    # ── Knowledge Graph (always loads — lightweight, not related to RAG) ──────
+    try:
+        from backend.knowledge_graph import build_knowledge_graph  # type: ignore
 
-            _knowledge_graph = build_knowledge_graph()
-            log.info(
-                "[OK] Knowledge Graph loaded",
-                nodes=_knowledge_graph.number_of_nodes(),
-                edges=_knowledge_graph.number_of_edges(),
-            )
-        except Exception as exc:
-            log.warning("[WARN] Knowledge Graph failed to load", error=str(exc))
-            _knowledge_graph = None
-    else:
-        log.info("[SKIP] Knowledge Graph skipped (SKIP_RAG_INIT=1)")
+        _knowledge_graph = build_knowledge_graph()
+        log.info(
+            "[OK] Knowledge Graph loaded",
+            nodes=_knowledge_graph.number_of_nodes(),
+            edges=_knowledge_graph.number_of_edges(),
+        )
+    except Exception as exc:
+        log.warning("[WARN] Knowledge Graph failed to load", error=str(exc))
+        _knowledge_graph = None
 
     elapsed = time.perf_counter() - t0
     log.info(f"[BOOT] Backend ready in {elapsed:.2f}s")

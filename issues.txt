@@ -1,25 +1,4 @@
+(.venv) PS D:\college\6th sem\GEN AI\synapse-ai-tutor> cd .\backend\
 (.venv) PS D:\college\6th sem\GEN AI\synapse-ai-tutor\backend> uvicorn main:app --reload --host 0.0.0.0 --port 8000
-INFO:     Will watch for changes in these directories: ['D:\\college\\6th sem\\GEN AI\\synapse-ai-tutor\\backend']
-INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     Started reloader process [13480] using WatchFiles
-INFO:     Started server process [4272]
-INFO:     Waiting for application startup.
-2026-07-05T21:17:06.920685Z [info     ] [BOOT] Synapse AI Tutor backend starting up... [main]
-2026-07-05T21:17:06.921208Z [warning  ] [ENV] Missing required env var [main] var=GROQ_API_KEY
-2026-07-05T21:17:06.922039Z [warning  ] [ENV] Missing required env var [main] var=JWT_SECRET
-2026-07-05T21:17:06.922798Z [info     ] [ENV] Optional env var not set [main] var=NVIDIA_API_KEY
-2026-07-05T21:17:06.923528Z [info     ] [ENV] Optional env var not set [main] var=GOOGLE_CLIENT_ID
-2026-07-05T21:17:06.924296Z [info     ] [ENV] Optional env var not set [main] var=GOOGLE_CLIENT_SECRET
-Loading faiss with AVX2 support.
-Could not load library with AVX2 support due to:
-ModuleNotFoundError("No module named 'faiss.swigfaiss_avx2'")
-Loading faiss.
-Successfully loaded faiss.
-[CACHE] Found cached chunks and FAISS index - loading directly...
-2026-07-05T21:17:16.562657Z [info     ] chunks_loaded                  [backend.chunking] count=4061 filepath='D:\\college\\6th sem\\GEN AI\\synapse-ai-tutor\\synapse_ai_tutor\\data\\chunks.pkl'
-2026-07-05T21:17:16.571829Z [info     ] faiss_index_loaded             [backend.embeddings] vectors=4061
-[OK] RAG Pipeline ready! (4061 chunks, 4061 vectors)
-2026-07-05T21:17:16.572612Z [info     ] [OK] RAG Pipeline ready        [main] chunks=4061
-2026-07-05T21:17:16.831978Z [info     ] [OK] Knowledge Graph loaded    [main] edges=120 nodes=83
-2026-07-05T21:17:16.832605Z [info     ] [BOOT] Backend ready in 9.91s  [main]
-INFO:     Application startup complete.
+INFO:     Will watch for changes in these directories: ['D:\\college\\6th sem\\GEN AI\\synapse-ai-tutor\\backend']ERROR:    [WinError 10013] An attempt was made to access a socket in a way forbidden by its access permissions
+(.venv) PS D:\college\6th sem\GEN AI\synapse-ai-tutor\backend> 
