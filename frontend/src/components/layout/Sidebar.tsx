@@ -3,20 +3,25 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   LayoutDashboard, BookOpen, Brain, ClipboardCheck,
   Share2, FileText, Map, User, ChevronLeft, ChevronRight,
-  LogOut, Zap,
+  LogOut, Zap, PenLine, Compass, Image, Play,
 } from 'lucide-react'
+
 import { useAuthStore } from '@/store/authStore'
 import { useUIStore } from '@/store/uiStore'
 
 const NAV_ITEMS = [
-  { to: '/dashboard',  label: 'Dashboard',  icon: LayoutDashboard },
-  { to: '/learn',      label: 'Learn',       icon: BookOpen },
-  { to: '/tutor',      label: 'AI Tutor',    icon: Brain },
-  { to: '/assessment', label: 'Assessment',  icon: ClipboardCheck },
-  { to: '/graph',      label: 'KG Explorer', icon: Share2 },
-  { to: '/notes',      label: 'Notes',       icon: FileText },
-  { to: '/roadmap',    label: 'Roadmap',     icon: Map },
-  { to: '/profile',    label: 'Profile',     icon: User },
+  { to: '/dashboard',  label: 'Overview',      icon: LayoutDashboard },
+  { to: '/learn',      label: 'Library',       icon: BookOpen },
+  { to: '/concepts',   label: 'Concepts',      icon: Compass },
+  { to: '/visualize',  label: 'Visualize',     icon: Image },
+  { to: '/tutor',      label: 'AI Tutor',      icon: Brain },
+  { to: '/study',      label: 'Study',         icon: Play },
+  { to: '/assessment', label: 'Evaluations',   icon: ClipboardCheck },
+  { to: '/graph',      label: 'Knowledge',     icon: Share2 },
+  { to: '/notes',      label: 'Notes',         icon: FileText },
+  { to: '/roadmap',    label: 'Roadmap',       icon: Map },
+  { to: '/whiteboard', label: 'Whiteboard',    icon: PenLine },
+  { to: '/profile',    label: 'Settings',      icon: User },
 ]
 
 export function Sidebar() {
@@ -28,11 +33,11 @@ export function Sidebar() {
 
   return (
     <motion.aside
-      animate={{ width: collapsed ? 72 : 240 }}
-      transition={{ duration: 0.25, ease: 'easeInOut' }}
+      animate={{ width: collapsed ? 68 : 240 }}
+      transition={{ type: 'spring', damping: 24, stiffness: 200 }}
       style={{
-        background: 'linear-gradient(180deg, #0f0f23 0%, #0a0a1a 100%)',
-        borderRight: '1px solid rgba(124,58,237,0.15)',
+        background: 'var(--bg-surface)',
+        borderRight: '1px solid var(--border-subtle)',
         display: 'flex',
         flexDirection: 'column',
         height: '100vh',
@@ -40,57 +45,57 @@ export function Sidebar() {
         left: 0,
         top: 0,
         zIndex: 40,
-        overflow: 'hidden',
       }}
     >
       {/* Logo */}
-      <div style={{ padding: collapsed ? '20px 0' : '20px 16px', display: 'flex', alignItems: 'center', gap: 10, minHeight: 72 }}>
+      <div style={{ padding: '24px 16px', display: 'flex', alignItems: 'center', gap: 12, height: 80, boxSizing: 'border-box' }}>
         <div style={{
-          width: 38, height: 38, borderRadius: 10, flexShrink: 0,
-          background: 'linear-gradient(135deg,#7c3aed,#06b6d4)',
+          width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+          background: 'var(--text-primary)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 0 20px rgba(124,58,237,0.4)',
+          boxShadow: 'var(--shadow-sm)',
         }}>
-          <Zap size={20} color="#fff" />
+          <Zap size={18} color="var(--bg-base)" fill="var(--bg-base)" />
         </div>
         <AnimatePresence>
           {!collapsed && (
             <motion.div
-              initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
-              transition={{ duration: 0.2 }}
+              initial={{ opacity: 0, width: 0 }}
+              animate={{ opacity: 1, width: 'auto' }}
+              exit={{ opacity: 0, width: 0 }}
+              style={{ overflow: 'hidden', whiteSpace: 'nowrap' }}
             >
-              <div style={{ fontWeight: 700, fontSize: 16, letterSpacing: '-0.3px' }} className="gradient-text">Synapse</div>
-              <div style={{ fontSize: 11, color: '#64748b', marginTop: -2 }}>AI Tutor</div>
+              <div style={{ fontWeight: 600, fontSize: 15, letterSpacing: '-0.02em', color: 'var(--text-primary)' }}>Synapse OS</div>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
       {/* Nav items */}
-      <nav style={{ flex: 1, padding: collapsed ? '0 8px' : '0 10px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <nav style={{ flex: 1, padding: '0 12px', display: 'flex', flexDirection: 'column', gap: 4, overflowY: 'auto', overflowX: 'hidden' }}>
         {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
           <NavLink key={to} to={to} title={collapsed ? label : undefined}
             style={({ isActive }) => ({
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: collapsed ? '10px 0' : '9px 12px',
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: collapsed ? '10px' : '8px 12px',
               justifyContent: collapsed ? 'center' : 'flex-start',
-              borderRadius: 10,
+              borderRadius: 8,
               textDecoration: 'none',
-              fontSize: 14, fontWeight: 500,
-              transition: 'all 0.15s',
-              background: isActive ? 'rgba(124,58,237,0.15)' : 'transparent',
-              color: isActive ? '#a78bfa' : '#94a3b8',
-              borderLeft: isActive && !collapsed ? '2px solid #7c3aed' : '2px solid transparent',
+              fontSize: 13,
+              fontWeight: isActive ? 600 : 500,
+              transition: 'all 0.1s ease',
+              background: isActive ? 'var(--bg-elevated)' : 'transparent',
+              color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
+              boxShadow: isActive ? 'var(--shadow-sm)' : 'none',
             })}
           >
             {({ isActive }) => (
               <>
-                <Icon size={18} color={isActive ? '#a78bfa' : '#64748b'} />
+                <Icon size={16} color={isActive ? 'var(--text-primary)' : 'var(--text-muted)'} style={{ flexShrink: 0 }} />
                 <AnimatePresence>
                   {!collapsed && (
                     <motion.span
                       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                      transition={{ duration: 0.15 }}
                     >{label}</motion.span>
                   )}
                 </AnimatePresence>
@@ -101,39 +106,40 @@ export function Sidebar() {
       </nav>
 
       {/* Footer: user + collapse */}
-      <div style={{ padding: collapsed ? '12px 8px' : '12px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+      <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         {!collapsed && user && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{
-              width: 32, height: 32, borderRadius: '50%',
-              background: 'linear-gradient(135deg,#7c3aed,#06b6d4)',
+              width: 28, height: 28, borderRadius: '50%',
+              background: 'var(--bg-elevated)', border: '1px solid var(--border)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 13, fontWeight: 700, color: '#fff', flexShrink: 0,
+              fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', flexShrink: 0,
             }}>
               {(user.display_name || user.username).charAt(0).toUpperCase()}
             </div>
-            <div style={{ overflow: 'hidden' }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div style={{ overflow: 'hidden', flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {user.display_name || user.username}
               </div>
-              <div style={{ fontSize: 11, color: '#64748b' }}>Student</div>
             </div>
-            <button onClick={handleLogout} title="Logout" style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', display: 'flex' }}>
-              <LogOut size={15} />
+            <button onClick={handleLogout} title="Logout" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', padding: 4 }}>
+              <LogOut size={14} />
             </button>
           </div>
         )}
-        <button
-          onClick={toggle}
-          style={{
-            width: '100%', padding: '8px 0', borderRadius: 8,
-            background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)',
-            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b',
-            transition: 'all 0.15s',
-          }}
-        >
-          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-        </button>
+        
+        <div style={{ display: 'flex', justifyContent: collapsed ? 'center' : 'flex-start' }}>
+          <button
+            onClick={toggle}
+            style={{
+              padding: '6px', borderRadius: 6,
+              background: 'transparent', border: 'none',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)',
+            }}
+          >
+            {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+          </button>
+        </div>
       </div>
     </motion.aside>
   )

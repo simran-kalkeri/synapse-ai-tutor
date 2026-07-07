@@ -456,6 +456,51 @@ def generate_student_summary(username: str) -> dict:
     except Exception as exc:
         logger.warning(f"[StudentMemory] generate_student_summary stats failed: {exc}")
 
+    # ── Compute streak days from assessment history ────────────────────────────
+    streak_days = 0
+    try:
+        from backend.progress_tracker import load_user_profile
+        profile = load_user_profile(username)
+        all_dates = set()
+        for t, d in profile.items():
+            if isinstance(d, dict) and not t.startswith("_"):
+                ts = d.get("last_accessed")
+                if ts:
+                    all_dates.add(ts[:10])
+                for a in d.get("assessment_history", []):
+                    ats = a.get("timestamp", "")
+                    if ats:
+                        all_dates.add(ats[:10])
+        if all_dates:
+            sorted_dates = sorted(all_dates, reverse=True)
+            from datetime import datetime, timedelta
+            streak = 0
+            today = datetime.now().date()
+            for i, date_str in enumerate(sorted_dates):
+                d = datetime.strptime(date_str[:10], "%Y-%m-%d").date()
+                if i == 0:
+                    if (today - d).days <= 1:
+                        streak = 1
+                    else:
+                        break
+                else:
+                    prev = datetime.strptime(sorted_dates[i-1][:10], "%Y-%m-%d").date()
+                    if (prev - d).days == 1:
+                        streak += 1
+                    else:
+                        break
+            streak_days = streak
+    except Exception:
+        pass
+
+    # ── Learning style from preferences ─────────────────────────────────────────
+    learning_style = "balanced"
+    try:
+        stored_prefs = profile.get("_preferences", {}) if 'profile' in dir() else {}
+        learning_style = stored_prefs.get("learning_style", "balanced")
+    except Exception:
+        pass
+
     return {
         "weak_topics":     weak[:5],
         "strong_topics":   strong[:5],
@@ -463,4 +508,6 @@ def generate_student_summary(username: str) -> dict:
         "recent_topics":   recent,
         "quiz_count":      len(quizzes),
         "level_summary":   level_summary,
+        "streak_days":     streak_days,
+        "learning_style":  learning_style,
     }

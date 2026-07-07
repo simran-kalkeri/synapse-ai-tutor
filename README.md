@@ -1,8 +1,8 @@
-# Synapse – Enterprise AI Tutor SaaS
+# Synapse – Adaptive AI Tutor
 
-> A premium, multi-modal Adaptive AI Tutoring SaaS platform combining GraphRAG, local LLMs, and dynamic visual engines for a highly personalized learning experience.
+> A multi-modal, adaptive AI tutoring platform combining GraphRAG, streaming LLMs, and a visual animation engine for a highly personalized learning experience.
 
-The **Synapse Suite** has evolved into a modern, enterprise-grade SaaS application. It diagnoses knowledge gaps, adapts explanations to the student's proficiency level, visualizes complex concepts step-by-step, and personalizes the learning journey dynamically through a stunning glassmorphism React frontend and a highly scalable FastAPI backend.
+Synapse diagnoses knowledge gaps, adapts explanations to the student's proficiency level, visualizes complex concepts step-by-step, and personalizes the learning journey through a React frontend and a FastAPI backend.
 
 ## Problem It Solves
 
@@ -10,7 +10,6 @@ Traditional education platforms offer one-size-fits-all content that doesn't ada
 
 ---
 
-![Build Status](https://img.shields.io/badge/build-passing-brightgreen)
 ![Version](https://img.shields.io/badge/version-2.0.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Python](https://img.shields.io/badge/python-3.12%2B-blue)
@@ -37,27 +36,28 @@ Traditional education platforms offer one-size-fits-all content that doesn't ada
 ## Features
 
 ### Key Functionalities
-- **GraphRAG Retrieval**: Hybrid Knowledge Graph-expanded vector retrieval leveraging FAISS and NetworkX to boost relevant learning chunks.
-- **Adaptive Assessment**: 15-question dynamic diagnostics that determine proficiency (Beginner, Intermediate, Advanced) and detect local knowledge gaps.
-- **Visual Animation Engine**: Dynamic visualizer that illustrates intricate structures step-by-step with synchronized D3.js and Recharts animations.
-- **Local Voice Layer**: Zero-friction hands-free learning using local speech-to-text and text-to-speech technologies.
-- **Real-Time Streaming**: Low-latency Server-Sent Events (SSE) streaming for LLM text generation, ensuring a ChatGPT-like responsive experience.
-- **Enterprise Authentication**: JWT-based secure authentication with session management.
-- **Premium UI/UX**: High-fidelity, responsive frontend design built with React 19, Tailwind CSS v4, Framer Motion, and a frosted glassmorphism violet palette.
+- **GraphRAG Retrieval**: Hybrid Knowledge Graph-expanded vector retrieval leveraging FAISS + BM25 + NetworkX to boost relevant learning chunks.
+- **Adaptive Assessment**: 15-question dynamic diagnostics (5 Easy / 5 Intermediate / 5 Hard) that determine proficiency and detect knowledge gaps.
+- **Visual Animation Engine**: Dynamic concept visualizer (neural network, transformer, binary search, linked list, recursion, RAG pipeline) exposed via `/api/v1/visualize`.
+- **Local Voice Layer**: Hands-free learning using local Faster-Whisper STT and gTTS/ElevenLabs TTS.
+- **Real-Time Streaming**: Low-latency Server-Sent Events (SSE) streaming for LLM text generation.
+- **Persistent Auth**: JWT-based authentication with users and refresh tokens persisted to JSON (survives restarts). bcrypt password hashing.
+- **Premium UI/UX**: React 19 + Tailwind CSS v4 + Framer Motion glassmorphism frontend.
 
-### Highlight Major Capabilities
-Synapse's true power lies in its **Student Intelligence Engine** and **Adaptive Tutoring Engine**. It builds a real-time mental model of the student, identifies specific prerequisites they are missing, and generates perfectly tailored explanations, analogies, and practice quizzes on the fly using LLM integrations.
+### Explain Modes
+`eli5` · `high_school` · `college` · `researcher` · `exam` · `interview`
+
+### LLM Providers
+`Groq` (primary) · `NVIDIA NIM` (secondary) · `Ollama` (local fallback)
 
 ---
 
 ## System Architecture
 
-The v2 architecture has been completely modernized into a decoupled frontend/backend paradigm:
-
-1. **Frontend Presentation (React/Vite)**: Manages state (Zustand), API caching (TanStack Query), routing (React Router v7), and rendering dynamic visual components.
-2. **API Gateway & Core (FastAPI)**: Handles REST endpoints, SSE streams, authentication, and request validation (Pydantic v2).
-3. **AI Core Modules (`synapse_ai_tutor`)**: The proprietary machine learning engines handling GraphRAG, Knowledge Graphs, Assessment Scoring, and LLM communication.
-4. **Data Persistence**: PostgreSQL for scalable enterprise data storage, with gracefully degrading JSON-based fallback for local prototyping.
+1. **Frontend (React/Vite)**: State (Zustand), API caching (TanStack Query), routing (React Router v7).
+2. **API Gateway (FastAPI)**: REST + SSE, JWT auth, Pydantic v2 validation.
+3. **AI Core (`synapse_ai_tutor/`)**: GraphRAG, Knowledge Graph, Assessment, LLM client, Voice, Visual Engine.
+4. **Storage**: JSON files (`synapse_ai_tutor/data/`) — zero-config, survives restarts. PostgreSQL optional via `docker-compose.pg.yml`.
 
 ---
 
@@ -65,23 +65,20 @@ The v2 architecture has been completely modernized into a decoupled frontend/bac
 
 ### Frontend
 - **Framework**: React 19, TypeScript, Vite
-- **Styling**: Tailwind CSS v4, Lucide React (Icons)
-- **State Management**: Zustand, TanStack React Query
-- **Animations & Visuals**: Framer Motion, D3.js, Recharts
-- **Networking**: Axios, Server-Sent Events (SSE)
+- **Styling**: Tailwind CSS v4, Lucide React
+- **State**: Zustand, TanStack React Query
+- **Animations**: Framer Motion, D3.js, Recharts
 
 ### Backend
 - **Framework**: FastAPI, Uvicorn
-- **Core Logic**: Python 3.12
-- **Auth**: JWT (python-jose), passlib, bcrypt
-- **LLM Integration**: Ollama API (GPT-OSS on local network)
-- **Vector Search & Embeddings**: FAISS, `sentence-transformers`
-- **Knowledge Graph**: NetworkX
+- **Runtime**: Python 3.12+
+- **Auth**: JWT (`python-jose`), `passlib[bcrypt]`
+- **LLM**: Groq SDK, OpenAI SDK (NVIDIA NIM), Ollama
+- **RAG**: FAISS, `sentence-transformers` (`BAAI/bge-large-en-v1.5`), BM25, NetworkX
 
-### Database & DevOps
-- **Primary DB**: PostgreSQL (Async SQLAlchemy)
-- **Fallback DB**: Local JSON-based storage (`data/progress.json`)
-- **Containerization**: Docker & Docker Compose (Nginx reverse proxy)
+### Storage
+- **Default**: JSON files (`synapse_ai_tutor/data/`) — no database required
+- **Optional PG**: PostgreSQL + SQLAlchemy (enable via `docker-compose.pg.yml`)
 
 ---
 
@@ -89,23 +86,28 @@ The v2 architecture has been completely modernized into a decoupled frontend/bac
 
 ```text
 synapse-ai-tutor/
-├── frontend/                       # React 19 + Vite Frontend SPA
-│   ├── src/
-│   │   ├── components/             # Reusable UI components
-│   │   ├── features/               # Domain-specific pages (Dashboard, Tutor, Graph, etc.)
-│   │   ├── lib/                    # API clients (Axios, SSE)
-│   │   └── store/                  # Zustand state management
-│   ├── package.json
-│   └── vite.config.ts
+├── frontend/                       # React 19 + Vite Frontend
+│   ├── src/features/               # Domain pages (Dashboard, Tutor, Assessment, etc.)
+│   ├── src/lib/api.ts              # Axios + SSE client
+│   └── package.json               (version 2.0.0)
 ├── backend/                        # FastAPI REST API
-│   ├── api/v1/                     # API Routers (Auth, Tutor, Assessment, etc.)
+│   ├── api/v1/                     # Routers: auth, tutor, assessment, visualize, …
 │   ├── schemas/                    # Pydantic v2 models
-│   ├── dependencies.py             # FastAPI dependency injection
-│   ├── main.py                     # App factory and lifespan events
+│   ├── dependencies.py             # JWT + RAG dependency injection
+│   ├── main.py                     # App factory + lifespan
 │   └── requirements.txt
-├── synapse_ai_tutor/               # Legacy AI core engine (GraphRAG, LLM integrations)
-├── docker-compose.yml              # Multi-container orchestration
-└── start-dev.ps1                   # Local Windows dev script
+├── synapse_ai_tutor/               # AI core engine (GraphRAG, LLM, Voice, Visual)
+│   ├── backend/                    # RAG, LLM client, assessment, student memory, TTS/STT
+│   ├── ai/                         # Evaluation, embeddings, LLM client (canonical)
+│   ├── visual_engine/ → ../visual_engine/
+│   ├── config/settings.py          # Single source of truth for all config
+│   ├── core/constants.py           # App-wide constants
+│   ├── data/                       # JSON persistence (auto-created)
+│   └── LEGACY.md                   # Streamlit legacy marker
+├── visual_engine/                  # Standalone animation engine (matplotlib + PIL)
+├── docker-compose.yml              # Default: backend-only
+├── docker-compose.pg.yml           # Optional: PostgreSQL + Redis overlay
+└── start-dev.ps1                   # Windows dev launcher
 ```
 
 ---
@@ -113,30 +115,32 @@ synapse-ai-tutor/
 ## Installation & Setup
 
 ### Prerequisites
-- **Node.js** 20+ (for frontend)
-- **Python** 3.12+ (for backend)
+- **Node.js** 20+ (frontend)
+- **Python** 3.12+ (backend)
 - **Git**
-- (Optional) Local **Ollama** server running `gpt-oss:20b` or a similar model for live LLM responses.
+- A **Groq API key** (free at [console.groq.com](https://console.groq.com)) for live LLM responses.
 
 ### Step-by-Step Installation
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/Gen-AI-Hackathon-2026/Team-A2.git
-   cd Team-A2
+   git clone https://github.com/AMAANALI70/synapse-ai-tutor.git
+   cd synapse-ai-tutor
    ```
 
 2. **Setup the Backend:**
-   Create a Python virtual environment and install dependencies:
    ```bash
-   cd backend
-   python -m venv venv
-   # Activate venv: `venv\Scripts\activate` on Windows, `source venv/bin/activate` on Mac/Linux
-   pip install -r requirements.txt
-   
-   # Set up environment variables
-   cp .env.example .env
-   cd ..
+   python -m venv .venv
+   # Windows:
+   .venv\Scripts\activate
+   # Mac/Linux:
+   source .venv/bin/activate
+
+   pip install -r backend/requirements.txt
+
+   # Copy and configure environment
+   cp backend/.env.example backend/.env
+   # Edit backend/.env and set GROQ_API_KEY=your_key_here
    ```
 
 3. **Setup the Frontend:**
@@ -150,80 +154,99 @@ synapse-ai-tutor/
 
 ## Usage & Running Locally
 
-### Development Mode
-For quick local development on Windows, you can use the provided PowerShell script which boots both servers simultaneously:
+### Quick Start (Windows)
 ```powershell
 .\start-dev.ps1
 ```
 
-**Alternatively, run them separately:**
+### Manual Start
 
-1. **Start the Backend (Terminal 1):**
-   ```bash
-   cd backend
-   # Ensure your venv is activated
-   uvicorn main:app --host 0.0.0.0 --port 8000 --reload
-   ```
+**Terminal 1 — Backend:**
+```bash
+cd backend
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
 
-2. **Start the Frontend (Terminal 2):**
-   ```bash
-   cd frontend
-   npm run dev
-   ```
+**Terminal 2 — Frontend:**
+```bash
+cd frontend
+npm run dev
+```
 
-Navigate to `http://localhost:5173` in your browser. 
-Use the built-in demo account to test features immediately:
-- **Username**: `demo`
-- **Password**: `demo123`
+Navigate to `http://localhost:5173`. Demo accounts:
+
+| Username | Password   |
+|----------|-----------|
+| `demo`   | `demo123` |
+| `student`| `student123` |
+| `admin`  | `admin123` |
 
 ---
 
 ## API Documentation
 
-Once the backend is running, FastAPI automatically generates interactive OpenAPI documentation.
+FastAPI generates interactive docs automatically:
 - **Swagger UI**: `http://localhost:8000/docs`
 - **ReDoc**: `http://localhost:8000/redoc`
+
+### Key Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/auth/login` | Login → JWT tokens |
+| `POST` | `/api/v1/tutor/explain` | SSE adaptive tutoring stream |
+| `GET`  | `/api/v1/assessment/start/{topic}` | Generate 15Q assessment |
+| `POST` | `/api/v1/assessment/submit` | Score answers + update memory |
+| `POST` | `/api/v1/visualize` | Generate concept animation frames (base64 PNG) |
+| `GET`  | `/api/v1/visualize/topics` | List supported visual topics |
+| `PATCH`| `/api/v1/memory/preferences` | Save learning preferences |
+| `GET`  | `/api/v1/eval/stats` | Satisfaction rating stats |
+| `POST` | `/api/v1/agent/tutor` | Multi-step agentic tutor (SSE) |
 
 ---
 
 ## Deployment
 
-The platform is fully containerized for enterprise deployments.
-
-To launch the entire stack (Frontend, Backend, PostgreSQL, and Nginx proxy) via Docker:
+### Default (backend-only, JSON storage):
 ```bash
 docker-compose up --build -d
 ```
-The application will be accessible at `http://localhost:80`.
+Backend at `http://localhost:8000`. Add `--profile production` for Nginx + React dist.
+
+### With PostgreSQL + Redis (optional):
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.pg.yml up --build -d
+```
+> Requires running `alembic upgrade head` first and implementing `workers/celery_app.py` for the Celery worker.
 
 ---
 
 ## Contributing
 
-We welcome contributions to the Synapse Suite!
-
-### Contribution Guidelines
 1. Fork the repository.
-2. Create a new branch (`git checkout -b feature/your-feature`).
-3. Commit your changes (`git commit -m 'Add some feature'`).
-4. Push to the branch (`git push origin feature/your-feature`).
-5. Open a Pull Request detailing your changes.
+2. Create a branch: `git checkout -b feature/your-feature`
+3. Commit: `git commit -m 'Add feature'`
+4. Push: `git push origin feature/your-feature`
+5. Open a Pull Request.
 
 ---
 
 ## Roadmap / Future Improvements
-- [ ] **Cloud Sync**: Centralized MongoDB/PostgreSQL hybrid for cross-device progress syncing.
-- [ ] **Expanded Visuals**: Add visualizers for CNNs, GANs, and Diffusion Models.
-- [ ] **Multi-language Support**: Voice narration and LLM interaction in languages other than English.
+- [ ] **Visual Engine in React**: Embed animation frames in `ConceptsPage` / `TutorPage` (frames already served by `/api/v1/visualize`)
+- [ ] **Voice in React**: TTS play button on tutor messages; STT input via browser mic
+- [ ] **PostgreSQL wiring**: Activate SQLAlchemy models for users + progress (foundation in `docker-compose.pg.yml`)
+- [ ] **Expanded Visuals**: Add CNNs, GANs, Diffusion Model visualizers
+- [ ] **Multi-language**: Voice narration + LLM responses in non-English languages
 
 ---
 
 ## License
-Distributed under the MIT License. See `LICENSE` for more information.
+
+Distributed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ---
 
 ## Contact / Author
-**Team A2**  
-Gen AI Hackathon 2026  
-Repository: [https://github.com/Gen-AI-Hackathon-2026/Team-A2](https://github.com/Gen-AI-Hackathon-2026/Team-A2)
+
+**Team A2** — Gen AI Hackathon 2026  
+Repository: [https://github.com/AMAANALI70/synapse-ai-tutor](https://github.com/AMAANALI70/synapse-ai-tutor)

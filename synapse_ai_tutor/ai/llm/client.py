@@ -1,10 +1,12 @@
 """
-LLM Client for Synapse AI Tutor.
-Primary: Groq API (cloud, fast inference)
-Fallback: Ollama (local, optional)
+LLM Client for Synapse AI Tutor — CANONICAL MODULE.
+Primary  : Ollama            (remote server at http://10.1.17.65:11434)
+Secondary: Groq API          (cloud, fast inference)
+Fallback : NVIDIA NIM API    (nvidia/nemotron-3-ultra-550b-a55b via OpenAI-compat endpoint)
 
-Replaces backend/llm_client.py with proper error handling,
-structured logging, and Groq as primary provider.
+This is the single source of truth for LLM calls.
+backend/llm_client.py is a thin wrapper that delegates _call_nvidia here;
+all new code should import from this module directly.
 
 Public API:
     generate_response(prompt, system_prompt, ...) -> str
@@ -100,6 +102,85 @@ def _call_groq(
         raise LLMOfflineError("groq") from exc
 
 
+# ── NVIDIA NIM Client ────────────────────────────────────────────────────
+
+def _call_nvidia(
+    prompt: str,
+    system_prompt: str = "",
+    temperature: float | None = None,
+    max_tokens: int | None = None,
+    model: Optional[str] = None,
+) -> str:
+    """
+    Call the NVIDIA NIM API (OpenAI-compatible endpoint) for LLM inference.
+
+    Endpoint: https://integrate.api.nvidia.com/v1
+    Compatible with the standard `openai` Python SDK.
+
+    Returns:
+        Generated text string.
+    Raises:
+        LLMOfflineError: if NVIDIA NIM is unreachable / not configured.
+        LLMRateLimitError: if the rate limit is exceeded.
+        LLMTimeoutError: on request timeout.
+    """
+    settings = get_settings()
+    api_key = settings.NVIDIA_API_KEY
+    if not api_key:
+        raise LLMOfflineError("nvidia")
+
+    try:
+        from openai import OpenAI  # reuse openai SDK pointed at NIM base URL
+    except ImportError:
+        raise LLMOfflineError("nvidia")  # openai package not installed
+
+    _model = model or settings.NVIDIA_MODEL
+    _temperature = temperature if temperature is not None else settings.NVIDIA_TEMPERATURE
+    _max_tokens = max_tokens or settings.NVIDIA_MAX_TOKENS
+
+    messages: list[dict] = []
+    if system_prompt:
+        messages.append({"role": "system", "content": system_prompt})
+    messages.append({"role": "user", "content": prompt})
+
+    try:
+        client = OpenAI(
+            base_url=settings.NVIDIA_BASE_URL,
+            api_key=api_key,
+        )
+        start = time.time()
+
+        response = client.chat.completions.create(
+            model=_model,
+            messages=messages,   # type: ignore[arg-type]
+            temperature=_temperature,
+            max_tokens=_max_tokens,
+        )
+
+        elapsed = time.time() - start
+        text = (response.choices[0].message.content or "").strip()
+
+        logger.info(
+            "nvidia_response",
+            model=_model,
+            tokens=getattr(response.usage, "total_tokens", 0),
+            elapsed_s=round(elapsed, 2),
+            response_len=len(text),
+        )
+        return text
+
+    except Exception as exc:
+        exc_str = str(exc).lower()
+        if "rate_limit" in exc_str or "429" in exc_str:
+            logger.warning("nvidia_rate_limit", error=str(exc))
+            raise LLMRateLimitError() from exc
+        if "timeout" in exc_str:
+            logger.warning("nvidia_timeout", error=str(exc))
+            raise LLMTimeoutError() from exc
+        logger.error("nvidia_error", error=str(exc))
+        raise LLMOfflineError("nvidia") from exc
+
+
 # ── Ollama Client (Fallback) ──────────────────────────────────────────────
 
 def _call_ollama(
@@ -181,37 +262,32 @@ def generate_response(
     """
     Generate a response using the configured LLM provider.
 
-    Provider priority: Groq (primary) → Ollama (fallback)
+    Provider priority: Ollama (primary) → Groq → NVIDIA NIM (fallback)
 
     Args:
-        prompt: User prompt text.
-        system_prompt: System/instruction prompt.
-        temperature: Sampling temperature.
-        max_tokens: Max tokens to generate.
-        model: Override the model name.
-        provider: Force a specific provider ("groq" or "ollama").
+        prompt:        User prompt text.
+        system_prompt: System / instruction prompt.
+        temperature:   Sampling temperature.
+        max_tokens:    Max tokens to generate.
+        model:         Override the model name (must match the target provider's catalogue).
+        provider:      Force a specific provider ("groq" | "nvidia" | "ollama").
 
     Returns:
         Generated text string.
-
-    Note:
-        For backward compatibility, this function catches LLM errors
-        and returns the legacy magic strings when called from old code
-        paths. New code should catch LLMError exceptions instead.
     """
     settings = get_settings()
 
-    # Determine provider order
+    # Determine provider order — Ollama primary, Groq/NVIDIA as fallback
     if provider:
         providers = [provider]
-    elif settings.GROQ_API_KEY:
-        providers = ["groq"]
-        if settings.OLLAMA_ENABLED:
-            providers.append("ollama")
-    elif settings.OLLAMA_ENABLED:
-        providers = ["ollama"]
     else:
         providers = []
+        if settings.OLLAMA_ENABLED:
+            providers.append("ollama")
+        if settings.GROQ_API_KEY:
+            providers.append("groq")
+        if settings.NVIDIA_API_KEY:
+            providers.append("nvidia")
 
     last_error: Optional[Exception] = None
 
@@ -219,6 +295,8 @@ def generate_response(
         try:
             if p == "groq":
                 return _call_groq(prompt, system_prompt, temperature, max_tokens, model)
+            elif p == "nvidia":
+                return _call_nvidia(prompt, system_prompt, temperature, max_tokens, model)
             elif p == "ollama":
                 return _call_ollama(prompt, system_prompt, temperature, max_tokens, model)
         except LLMError as exc:
@@ -234,7 +312,7 @@ def generate_response(
 
 def get_llm_status() -> dict:
     """
-    Check the status of configured LLM providers.
+    Check the status of all configured LLM providers.
 
     Returns:
         Dict with provider availability info.
@@ -244,10 +322,24 @@ def get_llm_status() -> dict:
         "primary_provider": settings.llm_provider,
         "groq_configured": bool(settings.GROQ_API_KEY),
         "groq_model": settings.GROQ_MODEL,
+        "nvidia_configured": settings.nvidia_enabled,
+        "nvidia_model": settings.NVIDIA_MODEL if settings.nvidia_enabled else None,
+        "nvidia_base_url": settings.NVIDIA_BASE_URL if settings.nvidia_enabled else None,
         "ollama_enabled": settings.OLLAMA_ENABLED,
         "ollama_url": settings.OLLAMA_BASE_URL if settings.OLLAMA_ENABLED else None,
         "ollama_model": settings.OLLAMA_MODEL if settings.OLLAMA_ENABLED else None,
     }
+
+    # Quick connectivity check for Ollama (primary)
+    if settings.OLLAMA_ENABLED:
+        try:
+            import requests
+            resp = requests.get(f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/tags", timeout=5)
+            status["ollama_reachable"] = resp.status_code == 200
+        except Exception:
+            status["ollama_reachable"] = False
+    else:
+        status["ollama_reachable"] = False
 
     # Quick connectivity check for Groq
     if settings.GROQ_API_KEY:
@@ -260,5 +352,17 @@ def get_llm_status() -> dict:
             status["groq_reachable"] = False
     else:
         status["groq_reachable"] = False
+
+    # Quick connectivity check for NVIDIA NIM
+    if settings.nvidia_enabled:
+        try:
+            from openai import OpenAI
+            client = OpenAI(base_url=settings.NVIDIA_BASE_URL, api_key=settings.NVIDIA_API_KEY)
+            client.models.list()
+            status["nvidia_reachable"] = True
+        except Exception:
+            status["nvidia_reachable"] = False
+    else:
+        status["nvidia_reachable"] = False
 
     return status

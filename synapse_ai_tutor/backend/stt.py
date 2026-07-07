@@ -32,9 +32,10 @@ import tempfile
 from pathlib import Path
 from typing import Optional
 
-import streamlit as st
-
 logger = logging.getLogger(__name__)
+
+# Model cache — replaces Streamlit's @st.cache_resource for FastAPI context
+_whisper_model_cache: dict[str, tuple] = {}
 
 # ---------------------------------------------------------------------------
 # Config — single source of truth from voice_config
@@ -79,13 +80,7 @@ def _ensure_ffmpeg() -> None:
 # Groq API key resolution
 # ---------------------------------------------------------------------------
 def _get_groq_key() -> Optional[str]:
-    """Retrieve Groq API key from Streamlit secrets → env var → None."""
-    try:
-        key = st.secrets.get("groq", {}).get("GROQ_API_KEY")
-        if key:
-            return key
-    except Exception:
-        pass
+    """Retrieve Groq API key from env var."""
     return os.getenv("GROQ_API_KEY")
 
 
@@ -178,20 +173,22 @@ def _try_openai_whisper(model_size: str):
         return None, None
 
 
-@st.cache_resource(show_spinner=False)
 def load_whisper_model(model_size: str = _MODEL_SIZE):
     """
-    Load and cache the local Whisper model for the Streamlit server lifetime.
+    Load and cache the local Whisper model for the server lifetime.
 
     Tries faster-whisper first; falls back to openai-whisper.
-    Cached via @st.cache_resource ΓÇö loads only once per server session.
+    Cached in module-level dict — loads only once per server session.
 
     Returns:
         (model, backend_name: str)
     Raises:
         RuntimeError if neither backend is importable.
     """
-    logger.info(f"[STT] Loading local Whisper model '{model_size}'ΓÇª")
+    if model_size in _whisper_model_cache:
+        return _whisper_model_cache[model_size]
+
+    logger.info(f"[STT] Loading local Whisper model '{model_size}'…")
     model, backend = _try_faster_whisper(model_size)
     if model is None:
         model, backend = _try_openai_whisper(model_size)
@@ -203,6 +200,7 @@ def load_whisper_model(model_size: str = _MODEL_SIZE):
             "  pip install openai-whisper"
         )
     logger.info(f"[STT] Using Faster-Whisper Local (backend={backend})")
+    _whisper_model_cache[model_size] = (model, backend)
     return model, backend
 
 

@@ -1,0 +1,81 @@
+
+# PostgreSQL + Redis + Celery overlay
+# ──────────────────────────────────────────────────────────────────────────────
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.pg.yml up
+#
+# This overlay adds PostgreSQL, Redis, and the Celery worker to the default
+# stack. Use this when you have wired the backend to a real database.
+# Prerequisites:
+#   1. Run alembic migrations: alembic upgrade head
+#   2. Set DATABASE_URL and REDIS_URL in your .env
+#   3. Implement workers/celery_app.py (currently stubbed)
+
+services:
+  # ── PostgreSQL ─────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: synapse-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: synapse
+      POSTGRES_PASSWORD: synapse
+      POSTGRES_DB: synapse_db
+    volumes:
+      - synapse_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U synapse -d synapse_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ──────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: synapse-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Celery Worker (background jobs: TTS, notes, embedding) ─────────────────
+  # NOTE: workers/celery_app.py must be implemented before enabling this.
+  # worker:
+  #   build:
+  #     context: .
+  #     dockerfile: backend/Dockerfile
+  #   container_name: synapse-worker
+  #   restart: unless-stopped
+  #   command: celery -A workers.celery_app worker --loglevel=info --concurrency=2
+  #   environment:
+  #     - DATABASE_URL=postgresql+asyncpg://synapse:synapse@postgres:5432/synapse_db
+  #     - REDIS_URL=redis://redis:6379/0
+  #     - GROQ_API_KEY=${GROQ_API_KEY:-}
+  #   volumes:
+  #     - ./synapse_ai_tutor/data:/app/synapse_ai_tutor/data
+  #     - synapse_audio_cache:/app/audio_cache
+  #   depends_on:
+  #     - redis
+  #     - postgres
+
+  # Override backend to add PG + Redis env vars
+  backend:
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://synapse:synapse@postgres:5432/synapse_db
+      - DATABASE_URL_SYNC=postgresql://synapse:synapse@postgres:5432/synapse_db
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  synapse_pgdata:
+    driver: local

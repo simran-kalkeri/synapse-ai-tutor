@@ -1,0 +1,26 @@
+{
+  "demo": {
+    "id": "00000000-0000-0000-0000-000000000001",
+    "username": "demo",
+    "email": "demo@synapse.ai",
+    "display_name": "Demo User",
+    "password_hash": "$2b$12$vxnguMvQLuyqriK9RAwdie8LQ.bkuEKodKSFqL3uAU73gqZQxHlme",
+    "created_at": "2024-01-01T00:00:00Z"
+  },
+  "admin": {
+    "id": "00000000-0000-0000-0000-000000000002",
+    "username": "admin",
+    "email": "admin@synapse.ai",
+    "display_name": "Admin",
+    "password_hash": "$2b$12$nrpUR/hnVUo3OKS9xXP2v.UeOaphJU3N3PWrAThHlbHMKqYBY23jq",
+    "created_at": "2024-01-01T00:00:00Z"
+  },
+  "student": {
+    "id": "00000000-0000-0000-0000-000000000003",
+    "username": "student",
+    "email": "student@synapse.ai",
+    "display_name": "Student",
+    "password_hash": "$2b$12$bR/SjRLzDbWu7U0N/a4MuOg.BRo25BkvD0D.kTcXElUothSd62Ud6",
+    "created_at": "2024-01-01T00:00:00Z"
+  }
+}

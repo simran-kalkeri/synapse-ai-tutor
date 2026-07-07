@@ -134,14 +134,7 @@ _CHUNK_MAX_CHARS = 2_500
 # API key resolution (ElevenLabs only)
 # ---------------------------------------------------------------------------
 def _get_elevenlabs_key() -> Optional[str]:
-    """Retrieve ElevenLabs API key from Streamlit secrets ΓåÆ env var ΓåÆ None."""
-    try:
-        import streamlit as st
-        key = st.secrets.get("elevenlabs", {}).get("ELEVENLABS_API_KEY")
-        if key:
-            return key
-    except Exception:
-        pass
+    """Retrieve ElevenLabs API key from env var."""
     return os.getenv("ELEVENLABS_API_KEY")
 
 

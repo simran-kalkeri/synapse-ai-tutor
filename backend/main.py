@@ -11,6 +11,7 @@ Run with:
 from __future__ import annotations
 
 import logging
+import os
 import sys
 import time
 from contextlib import asynccontextmanager
@@ -22,11 +23,34 @@ _SYNAPSE_ROOT = Path(__file__).resolve().parent.parent / "synapse_ai_tutor"
 if str(_SYNAPSE_ROOT) not in sys.path:
     sys.path.insert(0, str(_SYNAPSE_ROOT))
 
+# ── Load environment variables ───────────────────────────────────────────────
+# Load backend/.env so os.getenv() calls in backend/llm_client.py work.
+try:
+    from dotenv import load_dotenv as _load_dotenv
+    _env_path = Path(__file__).resolve().parent / ".env"
+    if _env_path.exists():
+        _load_dotenv(_env_path)
+except ImportError:
+    pass
+
 # ── Standard library / third-party ───────────────────────────────────────────
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
+
+# ── Prompt injection patterns ─────────────────────────────────────────────────
+import re as _re
+_INJECTION_PATTERNS = [
+    _re.compile(r"ignore\s+(all\s+)?(previous|above|prior)\s+instructions", _re.I),
+    _re.compile(r"you\s+are\s+now\s+(?!synapse|a\s+tutor|an\s+ai\s+tutor)", _re.I),
+    _re.compile(r"disregard\s+(your|all)\s+(instructions|guidelines|rules)", _re.I),
+    _re.compile(r"jailbreak", _re.I),
+    _re.compile(r"<\|im_start\|>", _re.I),
+    _re.compile(r"###\s*System:", _re.I),
+    _re.compile(r"\[INST\].*\[/INST\]", _re.I),
+]
 
 # ── Internal ──────────────────────────────────────────────────────────────────
 from api.v1.router import v1_router
@@ -79,21 +103,35 @@ async def lifespan(app: FastAPI):
     log.info("[BOOT] Synapse AI Tutor backend starting up...")
     t0 = time.perf_counter()
 
+    # ── Validate critical environment variables ──────────────────────────────
+    # JWT_SECRET is required for auth token signing.
+    _REQUIRED_ENV_VARS = ["JWT_SECRET"]
+    _OPTIONAL_ENV_VARS = ["GROQ_API_KEY", "NVIDIA_API_KEY", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]
+    for var in _REQUIRED_ENV_VARS:
+        if not os.environ.get(var):
+            log.warning("[ENV] Missing required env var", var=var)
+    for var in _OPTIONAL_ENV_VARS:
+        if not os.environ.get(var):
+            log.info("[ENV] Optional env var not set", var=var)
+
     # ── RAG Pipeline ─────────────────────────────────────────────────────────
-    try:
-        from backend.rag import RAGPipeline  # type: ignore
+    if not os.environ.get("SKIP_RAG_INIT"):
+        try:
+            from backend.rag import RAGPipeline  # type: ignore
 
-        _rag_pipeline = RAGPipeline()
-        ok = _rag_pipeline.initialize()
-        if ok:
-            log.info("[OK] RAG Pipeline ready", chunks=len(_rag_pipeline.chunks or []))
-        else:
-            log.warning("[WARN] RAG Pipeline initialised in degraded mode (no index)")
-    except Exception as exc:
-        log.warning("[WARN] RAG Pipeline failed to initialise", error=str(exc))
-        _rag_pipeline = None
+            _rag_pipeline = RAGPipeline()
+            ok = _rag_pipeline.initialize()
+            if ok:
+                log.info("[OK] RAG Pipeline ready", chunks=len(_rag_pipeline.chunks or []))
+            else:
+                log.warning("[WARN] RAG Pipeline initialised in degraded mode (no index)")
+        except Exception as exc:
+            log.warning("[WARN] RAG Pipeline failed to initialise", error=str(exc))
+            _rag_pipeline = None
+    else:
+        log.info("[SKIP] RAG Pipeline skipped (SKIP_RAG_INIT=1)")
 
-    # ── Knowledge Graph ───────────────────────────────────────────────────────
+    # ── Knowledge Graph (always loads — lightweight, not related to RAG) ──────
     try:
         from backend.knowledge_graph import build_knowledge_graph  # type: ignore
 
@@ -151,6 +189,34 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
         expose_headers=["X-Request-ID", "X-Process-Time"],
     )
+
+    # ── Static files: audio_cache ─────────────────────────────────────────────
+    _audio_cache_dir = Path(__file__).resolve().parent.parent / "audio_cache"
+    _audio_cache_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/audio", StaticFiles(directory=str(_audio_cache_dir)), name="audio")
+
+    # ── Prompt-injection guard middleware ─────────────────────────────────────
+    @app.middleware("http")
+    async def prompt_injection_guard(request: Request, call_next):
+        """Reject requests containing known prompt-injection patterns."""
+        content_type = request.headers.get("content-type", "")
+        if request.method in ("POST", "PUT", "PATCH") and "application/json" in content_type:
+            try:
+                body_bytes = await request.body()
+                body_text = body_bytes.decode("utf-8", errors="ignore")
+                for pattern in _INJECTION_PATTERNS:
+                    if pattern.search(body_text):
+                        return JSONResponse(
+                            status_code=400,
+                            content={"detail": "Request contains disallowed content."},
+                        )
+                # Rebuild the request with the already-consumed body
+                async def _receive():
+                    return {"type": "http.request", "body": body_bytes, "more_body": False}
+                request = Request(request.scope, _receive)
+            except Exception:
+                pass  # Never block on guard failure
+        return await call_next(request)
 
     # ── Request timing middleware ─────────────────────────────────────────────
     @app.middleware("http")

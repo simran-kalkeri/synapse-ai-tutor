@@ -132,18 +132,46 @@ def categorize_questions(questions: list) -> dict:
 
 def assign_difficulty(q: dict, idx: int, total: int) -> str:
     """
-    Heuristically assign difficulty based on question position and content length.
-    First third = easy, middle = intermediate, last third = hard.
+    Assign difficulty based on content length, technical vocabulary, and question type.
+    Uses multiple signals for more accurate classification.
     """
-    response_len = len(q.get("response", ""))
-    instruction_len = len(q.get("instruction", ""))
+    instruction = q.get("instruction", "")
+    response = q.get("response", "")
+    combined = instruction + " " + response
+    combined_len = len(combined)
 
-    # Short questions with short answers = easy
-    # Long complex instructions with long responses = hard
-    combined_len = instruction_len + response_len
-    if combined_len < 300:
+    # Technical jargon signals harder content
+    _HARD_KEYWORDS = [
+        "prove", "derive", "theorem", "complexity", "optimization",
+        "convergence", "gradient", "eigenvalue", "singular value",
+        "backpropagation", "transformer", "attention mechanism",
+        "variational", "inference", "latent space", "manifold",
+        "autoregressive", "likelihood", "entropy", "kl divergence",
+    ]
+    _EASY_KEYWORDS = [
+        "what is", "define", "example of", "basic", "simple",
+        "introduction", "overview", "purpose of", "benefit",
+        "difference between", "common", "typical",
+    ]
+
+    combined_lower = combined.lower()
+    hard_score = sum(1 for kw in _HARD_KEYWORDS if kw in combined_lower)
+    easy_score = sum(1 for kw in _EASY_KEYWORDS if kw in combined_lower)
+
+    net_score = hard_score - easy_score
+
+    if net_score >= 2:
+        return "hard"
+    if net_score <= -1:
         return "easy"
-    elif combined_len < 700:
+
+    if combined_len < 200:
+        return "easy"
+    elif combined_len < 500 and net_score <= 0:
+        return "easy"
+    elif combined_len < 500:
+        return "intermediate"
+    elif combined_len < 1000 and net_score < 1:
         return "intermediate"
     else:
         return "hard"
@@ -353,12 +381,13 @@ def calculate_score(answers: list, questions: list) -> dict:
     correct = 0
     total = len(questions)
 
-    per_difficulty = {"easy": {"correct": 0, "total": 0}, "intermediate": {"correct": 0, "total": 0}, "hard": {"correct": 0, "total": 0}}
+    per_difficulty = {}
 
     for i, q in enumerate(questions):
         diff = q.get("difficulty", "intermediate")
         pts = q.get("points", DIFFICULTY_WEIGHTS.get(diff, 1))
-        per_difficulty.setdefault(diff, {"correct": 0, "total": 0})
+        if diff not in per_difficulty:
+            per_difficulty[diff] = {"correct": 0, "total": 0}
         per_difficulty[diff]["total"] += 1
 
         if i < len(answers) and answers[i] is not None and answers[i] == q["correct_index"]:

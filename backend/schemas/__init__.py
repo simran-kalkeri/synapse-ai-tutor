@@ -8,6 +8,8 @@ from .models import (
     NoteResponse, NoteGenerateRequest, NoteListItem,
     RoadmapStep, RoadmapResponse,
     DashboardStats, ActivityItem, DashboardResponse,
+    MasteryTrendPoint, StudySessionInfo, Recommendation, AnalyticsResponse,
+    StudyGoal, CreateStudyGoalRequest,
 )
 
 __all__ = [
@@ -20,4 +22,6 @@ __all__ = [
     "NoteResponse", "NoteGenerateRequest", "NoteListItem",
     "RoadmapStep", "RoadmapResponse",
     "DashboardStats", "ActivityItem", "DashboardResponse",
+    "MasteryTrendPoint", "StudySessionInfo", "Recommendation", "AnalyticsResponse",
+    "StudyGoal", "CreateStudyGoalRequest",
 ]

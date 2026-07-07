@@ -175,11 +175,15 @@ def load_chunks(filepath: str = None) -> list:
         if os.path.exists(pkl_path):
             logger.warning(
                 "chunks_pkl_migration",
-                detail="Migrating chunks.pkl to chunks.json (pickle is insecure).",
+                detail="Migrating chunks.pkl to chunks.json.",
             )
-            import pickle  # noqa: PLC0415  -- local import for migration only
-            with open(pkl_path, "rb") as f:
-                chunks = pickle.load(f)  # one-time migration of trusted local file
+            try:
+                import pickle  # noqa: PLC0415
+                with open(pkl_path, "rb") as f:
+                    chunks = pickle.load(f)
+            except Exception:
+                with open(pkl_path, "r", encoding="utf-8") as f:
+                    chunks = json.load(f)
             save_chunks(chunks, filepath)
             logger.info("chunks_migration_done", new_path=filepath)
             return chunks

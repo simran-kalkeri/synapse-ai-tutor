@@ -142,6 +142,31 @@ class PGProgressRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Mentor Repository
+# ═══════════════════════════════════════════════════════════════════════════
+
+class PGMentorRepository:
+    """Repository for mentor goals (CRUD)."""
+
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    async def get_goals(self, user_id):
+        result = await self.session.execute(select(Goal).where(Goal.user_id == user_id))
+        return result.scalars().all()
+
+    async def create_goal(self, user_id, **kwargs):
+        goal = Goal(user_id=user_id, **kwargs)
+        self.session.add(goal)
+        await self.session.flush()
+        return goal
+
+    async def update_goal(self, goal_id, **kwargs):
+        await self.session.execute(update(Goal).where(Goal.id == goal_id).values(**kwargs))
+
+    async def delete_goal(self, goal_id):
+        await self.session.execute(delete(Goal).where(Goal.id == goal_id))
     async def get_knowledge_state(self, user_id: UUID, topic: str) -> Optional[KnowledgeState]:
         result = await self.session.execute(
             select(KnowledgeState).where(

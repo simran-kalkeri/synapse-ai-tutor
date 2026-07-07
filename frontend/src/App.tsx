@@ -16,6 +16,12 @@ const KnowledgeGraphPage = lazy(() => import('@/features/graph/KnowledgeGraphPag
 const NotesPage          = lazy(() => import('@/features/notes/NotesPage'))
 const RoadmapPage        = lazy(() => import('@/features/roadmap/RoadmapPage'))
 const ProfilePage        = lazy(() => import('@/features/profile/ProfilePage'))
+const WhiteboardPage     = lazy(() => import('@/features/whiteboard/WhiteboardPage'))
+const ConceptsPage       = lazy(() => import('@/features/concepts/ConceptsPage'))
+const VisualEnginePage   = lazy(() => import('@/features/visualize/VisualEnginePage'))
+const StudySessionPage   = lazy(() => import('@/features/study/StudySessionPage'))
+
+
 
 // ── QueryClient ────────────────────────────────────────────────────────────
 const queryClient = new QueryClient({
@@ -33,15 +39,14 @@ function PageLoader() {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      height: '100vh', background: '#0a0a1a',
+      height: '100vh', background: 'var(--bg-base)',
     }}>
       <div style={{
         width: 40, height: 40, borderRadius: '50%',
-        border: '3px solid rgba(124,58,237,0.2)',
-        borderTopColor: '#7c3aed',
+        border: '3px solid var(--primary-subtle)',
+        borderTopColor: 'var(--primary)',
         animation: 'spin 0.8s linear infinite',
       }} />
-      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
     </div>
   )
 }
@@ -100,6 +105,20 @@ function AppRoutes() {
         <Route path="/profile" element={
           <Protected><ProfilePage /></Protected>
         } />
+        <Route path="/whiteboard" element={
+          <Protected><WhiteboardPage /></Protected>
+        } />
+        <Route path="/concepts" element={
+          <Protected><ConceptsPage /></Protected>
+        } />
+        <Route path="/visualize" element={
+          <Protected><VisualEnginePage /></Protected>
+        } />
+        <Route path="/study" element={
+          <Protected><StudySessionPage /></Protected>
+        } />
+
+
 
         {/* Default */}
         <Route path="/" element={
@@ -120,14 +139,15 @@ export default function App() {
           position="bottom-right"
           toastOptions={{
             style: {
-              background: '#1a1a2e',
-              color: '#f1f5f9',
-              border: '1px solid rgba(124,58,237,0.3)',
+              background: 'var(--bg-elevated)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border-subtle)',
               borderRadius: 12,
               fontSize: 14,
+              boxShadow: 'var(--shadow-md)',
             },
-            success: { iconTheme: { primary: '#10b981', secondary: '#fff' } },
-            error:   { iconTheme: { primary: '#ef4444', secondary: '#fff' } },
+            success: { iconTheme: { primary: 'var(--success)', secondary: '#fff' } },
+            error:   { iconTheme: { primary: 'var(--danger)', secondary: '#fff' } },
           }}
         />
       </BrowserRouter>

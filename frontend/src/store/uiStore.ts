@@ -14,7 +14,7 @@ interface UIState {
 
 export const useUIStore = create<UIState>()(
   persist(
-    (set, get) => ({
+    (set, _get) => ({
       sidebarCollapsed: false,
       currentTopic:     '',
       selectedLevel:    'Intermediate',

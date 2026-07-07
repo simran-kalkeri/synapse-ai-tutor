@@ -14,10 +14,28 @@ from schemas import (
     AssessmentSubmitRequest, AssessmentResult,
 )
 
+import json
+import pathlib as _pathlib
+
 router = APIRouter(prefix="/assessment", tags=["Assessment"])
 
-# In-memory session store
-_SESSIONS: dict[str, dict] = {}
+# Persistent session store — survives server restarts
+_SESSIONS_FILE = _pathlib.Path(__file__).resolve().parent.parent.parent.parent / "synapse_ai_tutor" / "data" / "assessment_sessions.json"
+
+
+def _load_sessions() -> dict:
+    if _SESSIONS_FILE.exists():
+        try:
+            return json.loads(_SESSIONS_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+    return {}
+
+
+def _save_sessions(data: dict) -> None:
+    _SESSIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _SESSIONS_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
 
 
 def _build_question(q: dict, idx: int, topic: str) -> AssessmentQuestion:
@@ -54,12 +72,14 @@ async def start_assessment(topic: str, username: str = Depends(get_username)):
     questions = [_build_question(q, i, topic) for i, q in enumerate(raw_questions)]
     session_id = str(uuid.uuid4())
 
-    _SESSIONS[session_id] = {
+    sessions = _load_sessions()
+    sessions[session_id] = {
         "username":   username,
         "topic":      topic,
         "questions":  raw_questions,
         "started_at": datetime.now(timezone.utc).isoformat(),
     }
+    _save_sessions(sessions)
 
     return AssessmentStartResponse(
         session_id=session_id,
@@ -72,7 +92,8 @@ async def start_assessment(topic: str, username: str = Depends(get_username)):
 @router.post("/submit", response_model=AssessmentResult, summary="Submit answers and get results")
 async def submit_assessment(body: AssessmentSubmitRequest, username: str = Depends(get_username)):
     """Score submitted assessment answers and persist results."""
-    session = _SESSIONS.get(body.session_id)
+    sessions = _load_sessions()
+    session = sessions.get(body.session_id)
     if not session or session["username"] != username:
         raise HTTPException(status_code=404, detail="Assessment session not found")
 
@@ -90,17 +111,32 @@ async def submit_assessment(body: AssessmentSubmitRequest, username: str = Depen
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Scoring failed: {e}")
 
-    # Persist to progress tracker
+    # Persist assessment result to PostgreSQL
     try:
-        def _persist():
-            from backend.progress_tracker import update_assessment_result  # type: ignore
-            update_assessment_result(username, body.topic, result_raw)
-        await loop.run_in_executor(None, _persist)
-    except Exception:
-        pass
+        from synapse_ai_tutor.storage.database import get_session
+        from synapse_ai_tutor.storage.repositories.pg_repos import PGUserRepository, PGProgressRepository
+        async with get_session() as session:
+            user_repo = PGUserRepository(session)
+            user = await user_repo.get_by_username(username)
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            progress_repo = PGProgressRepository(session)
+            await progress_repo.add_assessment(
+                user_id=user.id,
+                topic=body.topic,
+                score=result_raw.get("score", 0),
+                max_score=result_raw.get("max_score", 0),
+                level=result_raw.get("level", "Beginner"),
+                knowledge_gaps=result_raw.get("knowledge_gaps", []),
+            )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Failed to persist assessment: {e}")
 
-    # Clean up session
-    _SESSIONS.pop(body.session_id, None)
+    # Clean up session from disk
+    sessions = _load_sessions()
+    sessions.pop(body.session_id, None)
+    _save_sessions(sessions)
 
     return AssessmentResult(
         topic=body.topic,

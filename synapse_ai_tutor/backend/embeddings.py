@@ -1,7 +1,10 @@
 """
 Embedding Pipeline for Synapse AI Tutor.
-Uses sentence-transformers/all-MiniLM-L6-v2 to generate embeddings
+Uses BAAI/bge-large-en-v1.5 to generate embeddings (1024-dim vectors)
 and builds a FAISS index for efficient similarity search.
+
+NOTE: Falls back to sentence-transformers/all-MiniLM-L6-v2 (384-dim)
+if bge-large fails to download (no network, quota exceeded, etc.).
 """
 
 import os
@@ -24,19 +27,37 @@ _model = None
 
 
 # ── Streamlit-cached loader (loaded ONCE per server session, never on reruns) ──
+# Primary model: BAAI/bge-large-en-v1.5 (1024-dim, higher quality)
+# Fallback model: sentence-transformers/all-MiniLM-L6-v2 (384-dim)
+_PRIMARY_MODEL = 'BAAI/bge-large-en-v1.5'
+_FALLBACK_MODEL = 'sentence-transformers/all-MiniLM-L6-v2'
+
 if _STREAMLIT_AVAILABLE:
     @st.cache_resource(show_spinner=False)
     def _load_model_cached() -> SentenceTransformer:
         """Load embedding model once and pin it in Streamlit's resource cache."""
-        logger.info("embedding_model_loading", model="all-MiniLM-L6-v2")
-        model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-        logger.info("embedding_model_ready")
-        return model
+        try:
+            logger.info("embedding_model_loading", model=_PRIMARY_MODEL)
+            model = SentenceTransformer(_PRIMARY_MODEL)
+            logger.info("embedding_model_ready", model=_PRIMARY_MODEL)
+            return model
+        except Exception as exc:
+            logger.warning(
+                "bge_large_load_failed_falling_back",
+                error=str(exc),
+                fallback=_FALLBACK_MODEL,
+            )
+            model = SentenceTransformer(_FALLBACK_MODEL)
+            logger.info("embedding_model_ready", model=_FALLBACK_MODEL)
+            return model
 
 
 def get_embedding_model() -> SentenceTransformer:
     """
     Get or load the embedding model.
+    Primary: BAAI/bge-large-en-v1.5 (1024-dim)
+    Fallback: sentence-transformers/all-MiniLM-L6-v2 (384-dim)
+
     When running inside Streamlit: uses st.cache_resource — loads ONCE,
     survives all reruns and all user sessions for the server lifetime.
     When running standalone: falls back to the Python-level _model singleton.
@@ -50,9 +71,18 @@ def get_embedding_model() -> SentenceTransformer:
     else:
         # Fallback for scripts/tests run outside Streamlit
         if _model is None:
-            logger.info("embedding_model_loading", model="all-MiniLM-L6-v2")
-            _model = SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')
-            logger.info("embedding_model_ready")
+            try:
+                logger.info("embedding_model_loading", model=_PRIMARY_MODEL)
+                _model = SentenceTransformer(_PRIMARY_MODEL)
+                logger.info("embedding_model_ready", model=_PRIMARY_MODEL)
+            except Exception as exc:
+                logger.warning(
+                    "bge_large_load_failed_falling_back",
+                    error=str(exc),
+                    fallback=_FALLBACK_MODEL,
+                )
+                _model = SentenceTransformer(_FALLBACK_MODEL)
+                logger.info("embedding_model_ready", model=_FALLBACK_MODEL)
         return _model
 
 
