@@ -283,6 +283,14 @@ async def update_preferences(body: PreferencesUpdateRequest, username: str = Dep
 rag_router = APIRouter(prefix="/rag", tags=["RAG"])
 
 
+def _chunks_from_rag_result(result) -> list:
+    """Accept legacy list results and newer GraphRAG envelopes."""
+    if isinstance(result, dict):
+        chunks = result.get("chunks", [])
+        return chunks if isinstance(chunks, list) else []
+    return result if isinstance(result, list) else []
+
+
 @rag_router.post("/upload")
 async def rag_upload(file: UploadFile = File(...), username: str = Depends(get_username), rag_pipeline=Depends(get_rag_pipeline)):
     """Upload a PDF document and add it to the RAG corpus."""
@@ -324,13 +332,18 @@ async def rag_upload(file: UploadFile = File(...), username: str = Depends(get_u
             from backend.chunking import save_chunks, load_chunks  # type: ignore
             from backend.embeddings import generate_embeddings, build_faiss_index, save_faiss_index  # type: ignore
 
-            existing = load_chunks()
+            existing = list(getattr(rag_pipeline, "chunks", None) or load_chunks())
             existing.extend(new_chunks)
-            save_chunks(existing)
+            save_chunks(existing, getattr(rag_pipeline, "chunks_path", None))
 
-            embeddings = generate_embeddings([c["text"] for c in existing])
+            embeddings = generate_embeddings(existing)
             index = build_faiss_index(embeddings)
-            save_faiss_index(index)
+            save_faiss_index(index, getattr(rag_pipeline, "index_path", None))
+
+            if rag_pipeline is not None:
+                rag_pipeline.chunks = existing
+                rag_pipeline.index = index
+                rag_pipeline.is_ready = True
 
             return len(new_chunks), len(existing)
         except Exception as e:
@@ -354,7 +367,7 @@ async def rag_search(body: dict, username: str = Depends(get_username), rag_pipe
     loop = asyncio.get_event_loop()
     def _search():
         if method == "graph" and topic:
-            return rag_pipeline.graph_rag_search(query, topic, k=5)
+            return _chunks_from_rag_result(rag_pipeline.graph_rag_search(query, topic, k=5))
         return rag_pipeline.search(query, k=5)
 
     chunks = await loop.run_in_executor(None, _search)
@@ -386,7 +399,7 @@ async def get_graph_data(username: str = Depends(get_username), kg=Depends(get_k
     nodes = []
     for n_id in kg.nodes():
         node_data = dict(kg.nodes[n_id])
-        node_type = node_data.get("type", "concept")
+        node_type = node_data.get("node_type") or node_data.get("type", "concept")
         nodes.append({
             "id": n_id,
             "label": n_id,
@@ -436,7 +449,7 @@ async def get_learning_path(from_concept: str, to_concept: str,
     loop = asyncio.get_event_loop()
     def _path():
         from backend.knowledge_graph import graph_learning_path  # type: ignore
-        return graph_learning_path(to_concept)
+        return graph_learning_path(to_concept, from_concept)
     try:
         result = await loop.run_in_executor(None, _path)
         return {"path": result}

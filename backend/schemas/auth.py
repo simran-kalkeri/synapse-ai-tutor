@@ -9,6 +9,11 @@ class LoginRequest(BaseModel):
     username: str
     password: str
 
+    @field_validator("username", "password")
+    @classmethod
+    def trim_credentials(cls, v: str) -> str:
+        return v.strip()
+
 
 class RegisterRequest(BaseModel):
     username: str

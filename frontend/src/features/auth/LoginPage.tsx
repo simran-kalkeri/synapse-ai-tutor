@@ -4,6 +4,17 @@ import { motion } from 'framer-motion'
 import { Brain, Lock, User, AlertCircle, Zap, Sparkles } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
 
+function getLoginError(err: unknown) {
+  const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+  if (detail) return detail
+
+  const message = (err as { message?: string })?.message ?? ''
+  if (message.includes('Network Error') || message.includes('Failed to fetch')) {
+    return 'Cannot reach the backend. Make sure FastAPI is running on port 8000.'
+  }
+  return message || 'Invalid username or password'
+}
+
 export default function LoginPage() {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -18,8 +29,7 @@ export default function LoginPage() {
       await login(username, password)
       navigate('/dashboard')
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setError(msg || 'Invalid username or password')
+      setError(getLoginError(err))
     }
   }
 
@@ -29,8 +39,8 @@ export default function LoginPage() {
     try {
       await login('demo', 'demo123')
       navigate('/dashboard')
-    } catch {
-      setError('Demo login failed — please enter credentials manually')
+    } catch (err: unknown) {
+      setError(`Demo login failed: ${getLoginError(err)}`)
     }
   }
 

@@ -19,6 +19,14 @@ TOOLS = {
 }
 
 
+def _chunks_from_rag_result(result) -> list:
+    """Accept legacy list results and newer GraphRAG envelopes."""
+    if isinstance(result, dict):
+        chunks = result.get("chunks", [])
+        return chunks if isinstance(chunks, list) else []
+    return result if isinstance(result, list) else []
+
+
 def _plan_steps(question: str, topic: str) -> list[str]:
     """Decide which steps to take based on the question type."""
     q_lower = question.lower()
@@ -53,9 +61,18 @@ async def agentic_tutor(
 
     # ── Conversation history ──────────────────────────────────────────────
     recent_context = []
+    student_summary = {}
+    topic_progress = {}
     try:
-        from backend.student_memory import get_recent_messages  # type: ignore
+        from backend.student_memory import get_recent_messages, generate_student_summary  # type: ignore
         recent_context = get_recent_messages(username, topic) or []
+        student_summary = generate_student_summary(username) or {}
+    except Exception:
+        pass
+
+    try:
+        from backend.progress_tracker import get_topic_progress  # type: ignore
+        topic_progress = get_topic_progress(username, topic) or {}
     except Exception:
         pass
 
@@ -82,6 +99,12 @@ async def agentic_tutor(
             if step == "retrieve":
                 def _retrieve():
                     if rag_pipeline and rag_pipeline.is_ready:
+                        try:
+                            chunks = _chunks_from_rag_result(rag_pipeline.graph_rag_search(question, topic, k=4))
+                            if chunks:
+                                return chunks
+                        except Exception:
+                            pass
                         return rag_pipeline.search(question, k=4)
                     return []
                 chunks = await loop.run_in_executor(None, _retrieve)
@@ -148,8 +171,17 @@ async def agentic_tutor(
         }
         mode_instruction = EXPLAIN_MODES.get(explain_mode, EXPLAIN_MODES["college"])
 
-        context = "\n".join(c.get("text", "")[:300] for c in context_chunks[:3])
+        context = "\n".join(c.get("text", "")[:500] for c in context_chunks[:4])
         analogies_text = tool_results.get("generate_analogy", "")
+        sources = [
+            {
+                "source": c.get("source", ""),
+                "page": c.get("page", 0),
+                "text": c.get("text", "")[:200],
+            }
+            for c in context_chunks[:5]
+            if isinstance(c, dict)
+        ]
 
         # Build conversation history block
         history_block = ""
@@ -164,6 +196,22 @@ async def agentic_tutor(
         system = f"""You are Synapse, an expert AI tutor for {topic}.
 {mode_instruction}
 
+Student profile:
+- Current level: {topic_progress.get("level", "Not Assessed")}
+- Current mastery: {topic_progress.get("mastery", 0)}%
+- Knowledge gaps to address: {", ".join(topic_progress.get("knowledge_gaps", [])[:6]) or "none recorded"}
+- Weak topics: {", ".join(student_summary.get("weak_topics", [])[:5]) or "none recorded"}
+- Strong topics: {", ".join(student_summary.get("strong_topics", [])[:5]) or "none recorded"}
+- Recent mistakes: {", ".join(student_summary.get("recent_mistakes", [])[:6]) or "none recorded"}
+- Preferred learning style: {student_summary.get("learning_style", "balanced")}
+
+Teaching requirements:
+- Adapt difficulty to the student's level and mastery.
+- Directly repair recorded knowledge gaps and recent mistakes when relevant.
+- Use the reference material when it is relevant, and avoid inventing citations.
+- Use these exact Markdown section headers: ## Explanation, ## Analogy, ## Worked Example, ## Practice Questions.
+- End with 2-3 short practice questions in the Practice Questions section.
+
 Relevant knowledge base context:
 {context}
 """
@@ -177,9 +225,13 @@ Relevant knowledge base context:
         queue = asyncio.Queue()
 
         def _produce():
-            for token in generate_response_streaming(question, system_prompt=system, max_tokens=1500):
-                queue.put_nowait(token)
-            queue.put_nowait(None)
+            try:
+                for token in generate_response_streaming(question, system_prompt=system, max_tokens=1500):
+                    queue.put_nowait(token)
+            except Exception as exc:
+                queue.put_nowait(f"\n\nError generating response: {exc}")
+            finally:
+                queue.put_nowait(None)
 
         loop.run_in_executor(None, _produce)
 
@@ -196,6 +248,9 @@ Relevant knowledge base context:
                 batch = []
         if batch:
             yield f"data: {json.dumps({'type': 'chunk', 'content': ''.join(batch)})}\n\n"
+
+        if sources:
+            yield f"data: {json.dumps({'type': 'sources', 'sources': sources})}\n\n"
 
         # Save the assistant response to conversation history
         try:

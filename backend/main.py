@@ -52,6 +52,11 @@ _INJECTION_PATTERNS = [
     _re.compile(r"\[INST\].*\[/INST\]", _re.I),
 ]
 
+
+def _env_flag(name: str) -> bool:
+    """Return True only for explicit truthy environment values."""
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
 # ── Internal ──────────────────────────────────────────────────────────────────
 from api.v1.router import v1_router
 
@@ -105,7 +110,7 @@ async def lifespan(app: FastAPI):
 
     # ── Validate critical environment variables ──────────────────────────────
     # JWT_SECRET is required for auth token signing.
-    _REQUIRED_ENV_VARS = ["JWT_SECRET"]
+    _REQUIRED_ENV_VARS = ["JWT_SECRET_KEY"]
     _OPTIONAL_ENV_VARS = ["GROQ_API_KEY", "NVIDIA_API_KEY", "GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"]
     for var in _REQUIRED_ENV_VARS:
         if not os.environ.get(var):
@@ -115,7 +120,7 @@ async def lifespan(app: FastAPI):
             log.info("[ENV] Optional env var not set", var=var)
 
     # ── RAG Pipeline ─────────────────────────────────────────────────────────
-    if not os.environ.get("SKIP_RAG_INIT"):
+    if not _env_flag("SKIP_RAG_INIT"):
         try:
             from backend.rag import RAGPipeline  # type: ignore
 

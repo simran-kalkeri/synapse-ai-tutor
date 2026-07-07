@@ -66,19 +66,56 @@ def _atomic_write(filepath: _pathlib.Path, data) -> None:
 
 # ── Persistent user store ──────────────────────────────────────────────────────
 
+_DEMO_CREDENTIALS = {
+    "demo": "demo123",
+    "admin": "admin123",
+    "student": "student123",
+}
+
+
 def _make_demo_users() -> dict:
-    """Create demo accounts with password 'password' for all three."""
-    pwd = _hash_password("password")
+    """Create demo accounts matching the documented demo credentials."""
     return {
-        "demo":    {"id": "00000000-0000-0000-0000-000000000001", "username": "demo",    "email": "demo@synapse.ai",    "display_name": "Demo User", "password_hash": pwd, "created_at": "2024-01-01T00:00:00Z"},
-        "admin":   {"id": "00000000-0000-0000-0000-000000000002", "username": "admin",   "email": "admin@synapse.ai",   "display_name": "Admin",     "password_hash": pwd, "created_at": "2024-01-01T00:00:00Z"},
-        "student": {"id": "00000000-0000-0000-0000-000000000003", "username": "student", "email": "student@synapse.ai", "display_name": "Student",   "password_hash": pwd, "created_at": "2024-01-01T00:00:00Z"},
+        "demo":    {"id": "00000000-0000-0000-0000-000000000001", "username": "demo",    "email": "demo@synapse.ai",    "display_name": "Demo User", "password_hash": _hash_password(_DEMO_CREDENTIALS["demo"]), "created_at": "2024-01-01T00:00:00Z"},
+        "admin":   {"id": "00000000-0000-0000-0000-000000000002", "username": "admin",   "email": "admin@synapse.ai",   "display_name": "Admin",     "password_hash": _hash_password(_DEMO_CREDENTIALS["admin"]), "created_at": "2024-01-01T00:00:00Z"},
+        "student": {"id": "00000000-0000-0000-0000-000000000003", "username": "student", "email": "student@synapse.ai", "display_name": "Student",   "password_hash": _hash_password(_DEMO_CREDENTIALS["student"]), "created_at": "2024-01-01T00:00:00Z"},
     }
+
+
+def _repair_demo_users(users: dict) -> bool:
+    """Keep bundled review/demo accounts aligned with documented passwords."""
+    changed = False
+    defaults = None
+    for username, password in _DEMO_CREDENTIALS.items():
+        user = users.get(username)
+        if not user:
+            if defaults is None:
+                defaults = _make_demo_users()
+            users[username] = defaults[username]
+            changed = True
+            continue
+
+        if not _verify_password(password, user.get("password_hash", "")):
+            if defaults is None:
+                defaults = _make_demo_users()
+            user["password_hash"] = defaults[username]["password_hash"]
+            changed = True
+
+        for key in ("id", "username", "email", "display_name", "created_at"):
+            if not user.get(key):
+                if defaults is None:
+                    defaults = _make_demo_users()
+                user[key] = defaults[username][key]
+                changed = True
+    return changed
 
 def _load_users() -> dict:
     if _USERS_FILE.exists():
         try:
-            return json.loads(_USERS_FILE.read_text(encoding="utf-8"))
+            users = json.loads(_USERS_FILE.read_text(encoding="utf-8"))
+            if _repair_demo_users(users):
+                _atomic_write(_USERS_FILE, users)
+            return users
         except Exception:
             pass
     # First run — seed demo accounts with properly hashed passwords
