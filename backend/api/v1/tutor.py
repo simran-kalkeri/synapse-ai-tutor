@@ -54,6 +54,14 @@ EXPLAIN_MODE_PROMPTS: dict[str, str] = {
 }
 
 
+def _chunks_from_rag_result(result) -> list:
+    """Accept legacy list results and newer GraphRAG envelopes."""
+    if isinstance(result, dict):
+        chunks = result.get("chunks", [])
+        return chunks if isinstance(chunks, list) else []
+    return result if isinstance(result, list) else []
+
+
 async def _stream_tutor_response(
     topic: str,
     question: str,
@@ -96,7 +104,7 @@ async def _stream_tutor_response(
             chunks = []
             if rag_pipeline and rag_pipeline.is_ready:
                 try:
-                    chunks = rag_pipeline.graph_rag_search(question, topic, k=5)
+                    chunks = _chunks_from_rag_result(rag_pipeline.graph_rag_search(question, topic, k=5))
                     if not chunks:
                         chunks = rag_pipeline.search(question, k=5)
                 except Exception:

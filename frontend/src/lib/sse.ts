@@ -3,7 +3,7 @@
  * Uses fetch() with ReadableStream to process server-sent events.
  */
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const BASE_URL = import.meta.env.VITE_API_URL || ''
 const STREAM_TIMEOUT_MS = 120_000
 
 export interface SSEOptions {

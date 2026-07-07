@@ -37,6 +37,29 @@ def _save_sessions(data: dict) -> None:
     _SESSIONS_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def _derive_mistakes_and_gaps(questions: list[dict], answers: list[int]) -> tuple[list[str], list[str]]:
+    mistakes: list[str] = []
+    gaps: list[str] = []
+    seen: set[str] = set()
+
+    for i, q in enumerate(questions):
+        selected = answers[i] if i < len(answers) else -1
+        if selected == q.get("correct_index"):
+            continue
+
+        question_text = str(q.get("question", "")).strip()
+        difficulty = str(q.get("difficulty", "intermediate")).title()
+        label = question_text[:90] + ("..." if len(question_text) > 90 else "")
+        if label:
+            mistakes.append(label)
+
+        gap = f"{difficulty} {q.get('topic') or 'concept'} question"
+        if gap not in seen:
+            seen.add(gap)
+            gaps.append(gap)
+
+    return mistakes, gaps[:6]
+
 
 def _build_question(q: dict, idx: int, topic: str) -> AssessmentQuestion:
     options = q.get("options", [])
@@ -111,24 +134,44 @@ async def submit_assessment(body: AssessmentSubmitRequest, username: str = Depen
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Scoring failed: {e}")
 
-    # Persist assessment result to PostgreSQL
+    answers_map = {a.question_id: a.selected_option for a in body.answers}
+    answers_list = [answers_map.get(i, -1) for i in range(len(session["questions"]))]
+    mistakes, derived_gaps = _derive_mistakes_and_gaps(session["questions"], answers_list)
+    mastery = int(result_raw.get("percentage", 0))
+    knowledge_gaps = result_raw.get("knowledge_gaps") or derived_gaps
+
+    # Persist assessment result to the active JSON stores.
     try:
-        from synapse_ai_tutor.storage.database import get_session
-        from synapse_ai_tutor.storage.repositories.pg_repos import PGUserRepository, PGProgressRepository
-        async with get_session() as session:
-            user_repo = PGUserRepository(session)
-            user = await user_repo.get_by_username(username)
-            if not user:
-                raise HTTPException(status_code=404, detail="User not found")
-            progress_repo = PGProgressRepository(session)
-            await progress_repo.add_assessment(
-                user_id=user.id,
-                topic=body.topic,
-                score=result_raw.get("score", 0),
-                max_score=result_raw.get("max_score", 0),
-                level=result_raw.get("level", "Beginner"),
-                knowledge_gaps=result_raw.get("knowledge_gaps", []),
-            )
+        from backend.progress_tracker import update_assessment_score  # type: ignore
+        from backend.student_memory import add_quiz_result, add_learning_event  # type: ignore
+
+        update_assessment_score(
+            username=username,
+            topic=body.topic,
+            score=result_raw.get("score", 0),
+            max_score=result_raw.get("max_score", 30),
+            level=result_raw.get("level", "Beginner"),
+            knowledge_gaps=knowledge_gaps,
+        )
+        add_quiz_result(
+            username=username,
+            topic=body.topic,
+            score=result_raw.get("score", 0),
+            max_score=result_raw.get("max_score", 30),
+            correct=result_raw.get("correct", 0),
+            total=result_raw.get("total", len(session["questions"])),
+            level_achieved=result_raw.get("level", "Beginner"),
+            mistakes=mistakes,
+        )
+        add_learning_event(
+            username=username,
+            topic=body.topic,
+            event_type="quiz_completed",
+            mistakes=mistakes,
+            quiz_score=mastery,
+            mastery_after=mastery,
+            questions_answered=result_raw.get("total", len(session["questions"])),
+        )
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"Failed to persist assessment: {e}")
@@ -144,11 +187,11 @@ async def submit_assessment(body: AssessmentSubmitRequest, username: str = Depen
         max_score=result_raw.get("max_score", 30),
         percentage=result_raw.get("percentage", 0),
         level=result_raw.get("level", "Beginner"),
-        mastery=result_raw.get("mastery", 0),
-        knowledge_gaps=result_raw.get("knowledge_gaps", []),
+        mastery=mastery,
+        knowledge_gaps=knowledge_gaps,
         correct=result_raw.get("correct", 0),
         total=result_raw.get("total", 15),
-        mistakes=result_raw.get("mistakes", []),
+        mistakes=mistakes,
     )
 
 

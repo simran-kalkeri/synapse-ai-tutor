@@ -1,6 +1,6 @@
 import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from 'axios'
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const BASE_URL = import.meta.env.VITE_API_URL || ''
 
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
@@ -77,20 +77,20 @@ export const authApi = {
 }
 
 export const tutorApi = {
-  topics: () => api.get<string[]>('/api/v1/tutor/topics'),
+  topics: () => api.get<{ topics: string[] }>('/api/v1/tutor/topics'),
   selectTopic: (topic: string) => api.post('/api/v1/tutor/topics/select', { topic }),
 }
 
 export const assessmentApi = {
   start: (topic: string) => api.get<{ questions: AssessmentQuestion[]; session_id: string; topic: string }>(`/api/v1/assessment/start/${encodeURIComponent(topic)}`),
   submit: (body: object) => api.post<AssessmentResult>('/api/v1/assessment/submit', body),
-  history: () => api.get<AssessmentResult[]>('/api/v1/assessment/history'),
+  history: () => api.get<{ history: AssessmentResult[] }>('/api/v1/assessment/history'),
 }
 
 export const memoryApi = {
   profile: () => api.get<StudentProfile>('/api/v1/memory/profile'),
   mastery: () => api.get<{ mastery: MasteryScore[] }>('/api/v1/memory/mastery'),
-  gaps: (topic: string) => api.get<string[]>(`/api/v1/memory/gaps/${encodeURIComponent(topic)}`),
+  gaps: (topic: string) => api.get<{ topic: string; gaps: { topic: string; gap: string; severity: string }[] }>(`/api/v1/memory/gaps/${encodeURIComponent(topic)}`),
   preferences: (body: object) => api.patch('/api/v1/memory/preferences', body),
 }
 
@@ -122,7 +122,7 @@ export const studyApi = {
 
 export const dashboardApi = {
   stats: () => api.get<DashboardData>('/api/v1/dashboard/stats'),
-  streak: () => api.get<number>('/api/v1/dashboard/streak'),
+  streak: () => api.get<{ streak_days: number }>('/api/v1/dashboard/streak'),
   analytics: () => api.get<AnalyticsData>('/api/v1/dashboard/analytics'),
   goals: {
     list: () => api.get<StudyGoal[]>('/api/v1/dashboard/goals'),
